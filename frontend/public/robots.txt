@@ -1,0 +1,7 @@
+# MarketProbe Production Robots.txt
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /ws/
+
+Sitemap: https://marketprobe.finance/sitemap.xml
