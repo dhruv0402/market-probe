@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  marketprobe-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: marketprobe-engine
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - MARKETPROBE_SECRET_KEY=prod_super_secret_marketprobe_jwt_key_9938210
+      - MARKETPROBE_DB_PATH=/app/data/marketprobe.db
+      - MARKETPROBE_MODEL_PATH=/app/data/xgb_model.pkl
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
