@@ -3,7 +3,8 @@ import {
   Activity, PlayCircle, LogOut, Search, ShieldCheck, Trophy, 
   Calculator, CheckCircle2, BookOpen, Rss, Play, Loader2, 
   ExternalLink, Zap, Database, TrendingUp, TrendingDown, 
-  Layers, ChevronRight, BarChart3, AlertTriangle, Sparkles 
+  Layers, ChevronRight, BarChart3, AlertTriangle, Sparkles,
+  Bell, Download
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import Tour from './Tour.jsx';
@@ -29,6 +30,7 @@ const inr = (n) => (n == null ? '—' : '₹' + fmt(n));
 const TABS = [
   { id: 'FEED', label: 'Feed', icon: Rss },
   { id: 'STOCKS', label: 'Stocks & Sectors', icon: Layers },
+  { id: 'ALERTS', label: 'Alpha Alerts', icon: Bell },
   { id: 'RANKINGS', label: 'Rankings', icon: Trophy },
   { id: 'SIMULATOR', label: 'P&L Simulator', icon: Calculator },
   { id: 'CHECKER', label: 'Fact-Check', icon: CheckCircle2 },
@@ -516,6 +518,103 @@ function StocksRadar() {
   );
 }
 
+/* -------------------------------- ALERTS ---------------------------------- */
+function AlphaAlerts() {
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [minConv, setMinConv] = useState(60);
+  const [copiedId, setCopiedId] = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    api(`/alerts?min_conviction=${minConv}`)
+      .then((d) => setAlerts(d.alerts || []))
+      .catch(() => setAlerts([]))
+      .finally(() => setLoading(false));
+  }, [minConv]);
+
+  const copyTelegram = (alert) => {
+    navigator.clipboard.writeText(alert.telegram_alert_message);
+    setCopiedId(alert.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <div className="eyebrow"><Bell size={13} /> High-Conviction Broadcast Feed</div>
+          <h1 className="mp-h1">Real-Time Alpha Alerts</h1>
+          <p className="mp-sub">Instant push notifications for algorithmic setups filtered by Bayesian model conviction &ge; {minConv}%.</p>
+        </div>
+      </div>
+
+      <div className="toolbar">
+        <span style={{ fontSize: 13.5, color: 'var(--muted)', fontWeight: 600 }}>Filter Min Conviction:</span>
+        {[50, 60, 65, 70].map((score) => (
+          <button 
+            key={score} 
+            className={`chip ${minConv === score ? 'on' : ''}`}
+            onClick={() => setMinConv(score)}
+          >
+            ⚡ &ge; {score}% Score
+          </button>
+        ))}
+        <div className="count"><b>{alerts.length}</b> Live Filtered Alerts</div>
+      </div>
+
+      {loading ? (
+        <div className="row" style={{ justifyContent: 'center', padding: 60 }}><Loader2 className="spin" /></div>
+      ) : (
+        <div className="grid-feed" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))' }}>
+          {alerts.map((a) => (
+            <div key={a.id} className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="row between">
+                <div className="row">
+                  <span className={`pill ${a.action === 'BUY' ? 'pill-buy' : 'pill-sell'}`} style={{ fontSize: 13, padding: '4px 10px' }}>
+                    {a.action} {a.ticker}
+                  </span>
+                  {a.is_sebi && <span className="pill pill-sebi">✓ SEBI</span>}
+                </div>
+                <span className="pill pill-hit" style={{ fontSize: 13, padding: '4px 10px' }}>
+                  {a.ai_conviction_score}% Conviction
+                </span>
+              </div>
+
+              <div className="row between">
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 15 }}>{a.creator}</div>
+                  <div style={{ fontSize: 12, color: 'var(--dim)' }}>{a.platform} · {String(a.timestamp).slice(0, 16)}</div>
+                </div>
+                <span className={`pill ${a.status === 'HIT' ? 'pill-hit' : a.status === 'MISS' ? 'pill-miss' : 'pill-open'}`}>
+                  {a.status}
+                </span>
+              </div>
+
+              <div className="levels" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                <div className="level"><small>Entry</small><b>{inr(a.entry_price)}</b></div>
+                <div className="level"><small>Target</small><b style={{ color: 'var(--green2)' }}>{inr(a.target_price)} (+{a.upside_pct}%)</b></div>
+                <div className="level"><small>Stop Loss</small><b style={{ color: '#fb7185' }}>{inr(a.stoploss_price)}</b></div>
+              </div>
+
+              <div className="row between" style={{ marginTop: 'auto', paddingTop: 10, borderTop: '1px solid var(--line)' }}>
+                <span style={{ fontSize: 12, color: 'var(--dim)' }}>Instant Webhook Broadcast Format</span>
+                <button 
+                  className={`btn ${copiedId === a.id ? 'btn-primary' : 'btn-ghost'}`} 
+                  onClick={() => copyTelegram(a)}
+                  style={{ fontSize: 12.5, padding: '6px 12px' }}
+                >
+                  {copiedId === a.id ? '✓ Copied Telegram Alert' : 'Copy Telegram Push Payload'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 /* -------------------------------- RANKINGS -------------------------------- */
 function Rankings() {
   const [rows, setRows] = useState(null);
@@ -839,6 +938,14 @@ function Dataset() {
           <input placeholder="Search ticker or advisor..." value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} />
         </div>
         {busy && <Loader2 size={16} className="spin" />}
+        <a 
+          href={`${API}/export/sebi-audit?format=csv`} 
+          download="marketprobe_sebi_audit_report.csv"
+          className="btn btn-ghost" 
+          style={{ textDecoration: 'none' }}
+        >
+          <Download size={14} /> Export SEBI Audit (CSV)
+        </a>
       </div>
 
       <div className="card" style={{ overflowX: 'auto' }}>
@@ -1012,6 +1119,7 @@ export default function MarketProbeApp() {
 
       <main className="mp-main">
         {tab === 'FEED' && <Feed data={feed} loading={!feed && !feedErr} error={feedErr} />}
+        {tab === 'ALERTS' && <AlphaAlerts />}
         {tab === 'STOCKS' && <StocksRadar />}
         {tab === 'RANKINGS' && <Rankings />}
         {tab === 'SIMULATOR' && <Simulator />}

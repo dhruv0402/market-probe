@@ -15,6 +15,7 @@ PROJECT_ROOT = _get_project_root()
 import os
 import sqlite3
 import asyncio
+import io
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -1131,6 +1132,101 @@ def audit_live_text_fastpath(req: AuditTextRequest):
         "verdict_summary": f"Target: ₹{target} (+{upside}%), Stop Loss: ₹{stoploss} (-{downside}%). Model Conviction Score: {conviction}% (Historical Win Rate: {'75%' if conviction >= 60 else '38%'})."
     }
 
+@app.get("/api/alerts")
+def get_high_conviction_alerts(min_conviction: float = Query(60.0, description="Minimum AI conviction score filter")):
+    """Returns high-conviction calls recommended for automated push alerts and Telegram notifications."""
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT 
+            r.id, r.ticker, r.action, r.entry_price, r.target_price, r.stoploss_price,
+            r.call_timestamp, r.raw_quote, r.outcome_status,
+            i.name as creator_name, i.platform, i.is_sebi_registered as is_sebi, i.sebi_reg_no
+        FROM recommendations r
+        JOIN influencers i ON r.influencer_id = i.id
+        ORDER BY r.call_timestamp DESC
+        LIMIT 100
+    ''')
+    rows = cur.fetchall()
+    conn.close()
+
+    alerts = []
+    for row in rows:
+        conv = compute_ai_conviction_score(
+            influencer_id=None,
+            entry=float(row["entry_price"] or 100),
+            target=float(row["target_price"] or 108),
+            stoploss=float(row["stoploss_price"] or 95),
+            is_sebi=bool(row["is_sebi"]),
+            raw_quote=row["raw_quote"] or ""
+        )
+        if conv >= min_conviction:
+            upside = round(((row["target_price"] - row["entry_price"]) / row["entry_price"]) * 100, 2) if row["entry_price"] else 0
+            alerts.append({
+                "id": row["id"],
+                "ticker": row["ticker"],
+                "action": row["action"],
+                "creator": row["creator_name"],
+                "platform": row["platform"],
+                "is_sebi": bool(row["is_sebi"]),
+                "entry_price": row["entry_price"],
+                "target_price": row["target_price"],
+                "stoploss_price": row["stoploss_price"],
+                "upside_pct": upside,
+                "ai_conviction_score": conv,
+                "status": row["outcome_status"],
+                "timestamp": row["call_timestamp"],
+                "telegram_alert_message": f"🚨 [MarketProbe Alpha Alert]\nTicker: {row['ticker']} ({row['action']})\nCreator: {row['creator_name']} ({row['platform']})\nTarget: ₹{row['target_price']} (+{upside}%)\nStop Loss: ₹{row['stoploss_price']}\nAI Conviction: {conv}%\nTimestamp: {row['call_timestamp']}"
+            })
+    return {"total_alerts": len(alerts), "min_conviction_threshold": min_conviction, "alerts": alerts}
+
+@app.get("/api/export/sebi-audit")
+def export_sebi_compliance_audit(format: str = Query("json", regex="^(json|csv)$")):
+    """Generates an official SEBI compliance audit trail report for regulatory oversight and institutional review."""
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT 
+            r.id as audit_id,
+            r.call_timestamp as date_recorded,
+            i.name as advisor_name,
+            i.platform,
+            i.is_sebi_registered as sebi_registered,
+            COALESCE(i.sebi_reg_no, 'UNREGISTERED') as sebi_reg_number,
+            r.ticker as nse_ticker,
+            r.action as trade_action,
+            r.entry_price,
+            r.target_price,
+            r.stoploss_price,
+            r.outcome_status as verified_outcome,
+            r.raw_quote as exact_statement,
+            r.source_url
+        FROM recommendations r
+        JOIN influencers i ON r.influencer_id = i.id
+        ORDER BY r.call_timestamp DESC
+    ''')
+    rows = cur.fetchall()
+    conn.close()
+
+    if format == "csv":
+        df = pd.DataFrame([dict(r) for r in rows])
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False)
+        return Response(
+            content=csv_buffer.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=marketprobe_sebi_audit_report.csv"}
+        )
+
+    return {
+        "report_title": "MarketProbe SEBI Financial Recommendation Compliance Audit",
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "total_audited_records": len(rows),
+        "regulatory_disclaimer": "This audit trail is compiled from empirical social and broker transcripts evaluated against real-time NSE tick data. It provides quantitative performance verification for compliance review.",
+        "records": [dict(r) for r in rows]
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("src.backend.api:app", host="0.0.0.0", port=8000, reload=True)
+
