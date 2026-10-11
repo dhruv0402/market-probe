@@ -441,13 +441,13 @@ function LandingPage({ onOpenAuth, onLaunchDemo, theme, setTheme, glow, setGlow 
 
               <div className="card" style={{ padding: 16 }}>
                 <div style={{ fontSize: 11, color: 'var(--dim)', fontWeight: 800 }}>TOTAL TRACKED CALLS</div>
-                <div style={{ fontSize: 22, fontWeight: 900, color: '#fff', marginTop: 4 }}>995 Recommendations</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--text)', marginTop: 4 }}>995 Recommendations</div>
                 <div style={{ fontSize: 12, color: 'var(--blue)', marginTop: 2 }}>Across 51 YouTube channels & Telegram desks</div>
               </div>
 
               <div className="card" style={{ padding: 16 }}>
                 <div style={{ fontSize: 11, color: 'var(--dim)', fontWeight: 800 }}>COMPLIANCE STATUS</div>
-                <div style={{ fontSize: 14, fontWeight: 800, color: '#fbbf24', marginTop: 4 }}>64% Unregistered Finfluencers</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--amber)', marginTop: 4 }}>64% Unregistered Finfluencers</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Operating without SEBI Research Analyst license</div>
               </div>
             </div>
@@ -732,7 +732,7 @@ function Feed({ data, loading, error, onSelectStock }) {
         <div className="hero-ring">
           <div className="card" style={{ padding: '16px 20px', textAlign: 'center', background: 'rgba(16,185,129,0.06)', borderColor: 'rgba(16,185,129,0.2)' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--green2)' }}>MODEL WIN-RATE GATE</div>
-            <div style={{ fontSize: 30, fontWeight: 900, color: '#fff', marginTop: 4 }}>75.4%</div>
+            <div style={{ fontSize: 30, fontWeight: 900, color: 'var(--text)', marginTop: 4 }}>75.4%</div>
             <div style={{ fontSize: 11, color: 'var(--muted)' }}>On conv &gt; 60%</div>
           </div>
         </div>
