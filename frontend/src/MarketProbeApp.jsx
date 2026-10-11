@@ -4,7 +4,8 @@ import {
   Calculator, CheckCircle2, BookOpen, Rss, Play, Loader2, 
   ExternalLink, Zap, Database, TrendingUp, TrendingDown, 
   Layers, ChevronRight, BarChart3, AlertTriangle, Sparkles,
-  Bell, Download, ArrowRight, Lock, Key, Users, Check, X, Shield, Globe
+  Bell, Download, ArrowRight, Lock, Key, Users, Check, X, Shield, Globe,
+  Sun, Moon, Palette
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import Tour from './Tour.jsx';
@@ -267,8 +268,53 @@ function OAuthModal({ open, onClose, onAuth }) {
   );
 }
 
+/* ---------------------------------- THEME & LIGHTING CONTROLLER ---------------------------------- */
+const GLOW_SCHEMES = [
+  { id: 'emerald', label: 'Emerald Mint', color: '#10b981' },
+  { id: 'cyan', label: 'Cyan Cyber', color: '#06b6d4' },
+  { id: 'violet', label: 'Ultra Violet', color: '#a855f7' },
+  { id: 'amber', label: 'Solar Amber', color: '#f59e0b' },
+];
+
+function ThemeControls({ theme, setTheme, glow, setGlow }) {
+  return (
+    <div className="theme-ctrl-wrap">
+      {/* Light / Dark Mode Toggle */}
+      <button 
+        type="button" 
+        className={`theme-btn-toggle ${theme === 'dark' ? 'active' : ''}`}
+        onClick={() => setTheme('dark')}
+        title="Switch to Dark Mode"
+      >
+        <Moon size={14} />
+      </button>
+      <button 
+        type="button" 
+        className={`theme-btn-toggle ${theme === 'light' ? 'active' : ''}`}
+        onClick={() => setTheme('light')}
+        title="Switch to Light Mode"
+      >
+        <Sun size={14} />
+      </button>
+
+      {/* Dynamic Lighting Color Swatches */}
+      <div className="glow-palette-wrap" title="Ambient Lighting Tint">
+        {GLOW_SCHEMES.map((scheme) => (
+          <span
+            key={scheme.id}
+            className={`glow-dot ${glow === scheme.id ? 'active' : ''}`}
+            style={{ backgroundColor: scheme.color, color: scheme.color }}
+            onClick={() => setGlow(scheme.id)}
+            title={`Lighting: ${scheme.label}`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ---------------------------------- LANDING PAGE ---------------------------------- */
-function LandingPage({ onOpenAuth, onLaunchDemo }) {
+function LandingPage({ onOpenAuth, onLaunchDemo, theme, setTheme, glow, setGlow }) {
   return (
     <div className="landing-shell">
       {/* Top Header */}
@@ -289,6 +335,7 @@ function LandingPage({ onOpenAuth, onLaunchDemo }) {
         </div>
 
         <div className="landing-actions">
+          <ThemeControls theme={theme} setTheme={setTheme} glow={glow} setGlow={setGlow} />
           <button className="btn btn-ghost" onClick={() => onOpenAuth('login')}>
             Sign In
           </button>
@@ -1393,6 +1440,20 @@ export default function MarketProbeApp() {
 
   const [authModal, setAuthModal] = useState({ open: false, mode: 'login' });
 
+  const [theme, setTheme] = useState(() => localStorage.getItem('mp_theme') || 'dark');
+  const [glow, setGlow] = useState(() => localStorage.getItem('mp_glow') || 'emerald');
+
+  useEffect(() => {
+    localStorage.setItem('mp_theme', theme);
+    document.documentElement.classList.remove('dark', 'light');
+    document.documentElement.classList.add(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem('mp_glow', glow);
+    document.documentElement.setAttribute('data-glow', glow);
+  }, [glow]);
+
   useEffect(() => {
     if (!user) return;
     api('/home-feed').then(setFeed).catch((e) => setFeedErr(e.message));
@@ -1442,6 +1503,10 @@ export default function MarketProbeApp() {
         <LandingPage 
           onOpenAuth={(mode) => setAuthModal({ open: true, mode })} 
           onLaunchDemo={launchDemoUser} 
+          theme={theme}
+          setTheme={setTheme}
+          glow={glow}
+          setGlow={setGlow}
         />
         <OAuthModal 
           open={authModal.open} 
@@ -1475,6 +1540,9 @@ export default function MarketProbeApp() {
         </nav>
 
         <div className="mp-spacer" />
+
+        {/* Theme & Lighting Switcher in App Header */}
+        <ThemeControls theme={theme} setTheme={setTheme} glow={glow} setGlow={setGlow} />
 
         <button className="btn btn-blue" data-tour="tour-btn" onClick={startTour}>
           <PlayCircle size={15} /> Product Tour
