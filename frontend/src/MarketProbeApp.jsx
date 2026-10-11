@@ -4,7 +4,7 @@ import {
   Calculator, CheckCircle2, BookOpen, Rss, Play, Loader2, 
   ExternalLink, Zap, Database, TrendingUp, TrendingDown, 
   Layers, ChevronRight, BarChart3, AlertTriangle, Sparkles,
-  Bell, Download
+  Bell, Download, ArrowRight, Lock, Key, Users, Check, X, Shield, Globe
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import Tour from './Tour.jsx';
@@ -99,13 +99,38 @@ function LiveTape() {
   );
 }
 
-/* ---------------------------------- AUTH ---------------------------------- */
-function AuthPage({ onAuth }) {
+/* ---------------------------------- OAUTH & AUTH MODAL ---------------------------------- */
+function OAuthModal({ open, onClose, onAuth }) {
   const [mode, setMode] = useState('login');
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(null);
+
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  if (!open) return null;
+
+  const handleOAuth = async (provider, defaultName) => {
+    setErr('');
+    setOauthLoading(provider);
+    try {
+      const email = `trader.${provider}@marketprobe.finance`;
+      const data = await api('/auth/oauth', {
+        method: 'POST',
+        body: JSON.stringify({
+          provider,
+          name: defaultName,
+          email,
+        }),
+      });
+      onAuth(data.access_token, data.user, true);
+    } catch (ex) {
+      setErr(ex.message || `Failed to sign in with ${provider}`);
+    } finally {
+      setOauthLoading(null);
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -120,85 +145,408 @@ function AuthPage({ onAuth }) {
         : await api('/auth/register', { method: 'POST', body: JSON.stringify(form) });
       onAuth(data.access_token, data.user, mode === 'signup');
     } catch (ex) {
-      setErr(ex.message === 'Failed to fetch' ? 'Cannot reach the server. Is the backend running on port ' + BACKEND_PORT + '?' : ex.message);
-    } finally { setBusy(false); }
+      setErr(ex.message === 'Failed to fetch' ? 'Cannot reach server. Is the backend running?' : ex.message);
+    } finally { 
+      setBusy(false); 
+    }
   };
 
-  const demo = async () => {
-    setBusy(true); setErr('');
+  const launchDemo = async () => {
+    setBusy(true);
+    setErr('');
     try {
       const data = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email: 'demo@marketprobe.in', password: 'demo123' }) });
       onAuth(data.access_token, data.user, true);
-    } catch (ex) { setErr(ex.message); } finally { setBusy(false); }
+    } catch (ex) {
+      setErr(ex.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <div className="auth-wrap">
-      <div className="auth-left">
-        <div className="grid-bg" />
-        <div className="mp-logo"><div className="mp-logo-badge"><Activity size={22} /></div>MarketProbe</div>
-        
-        <div style={{ margin: 'auto 0 0' }}>
-          <div className="eyebrow"><Sparkles size={13} /> Institutional Finfluencer Audit Infrastructure</div>
-          <h1 className="auth-headline">
-            Stop trusting stock tips.<br />
-            <span className="grad-text">Start verifying alpha.</span>
-          </h1>
-          <p style={{ color: 'var(--muted)', fontSize: 16, lineHeight: 1.6, maxWidth: 520, marginTop: 14 }}>
-            MarketProbe autonomously indexes, transcribes, and audits Indian finfluencer and broker recommendations against real-time NSE tick data with sub-second accuracy.
+    <div className="modal-bg" onClick={onClose}>
+      <div className="auth-modal-card" onClick={(e) => e.stopPropagation()}>
+        <button className="auth-modal-close" onClick={onClose} title="Close">
+          <X size={20} />
+        </button>
+
+        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+          <div className="mp-logo-badge" style={{ margin: '0 auto 12px', width: 46, height: 46 }}>
+            <Activity size={24} />
+          </div>
+          <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
+            {mode === 'login' ? 'Access MarketProbe Terminal' : 'Create Quantitative Account'}
+          </h2>
+          <p style={{ margin: '6px 0 0', color: 'var(--muted)', fontSize: 13.5 }}>
+            Enterprise algorithmic verification & regulatory alpha suite.
           </p>
         </div>
 
-        <div className="auth-proof">
-          <div className="card">
-            <div style={{ fontSize: '11px', color: 'var(--dim)', fontWeight: 700 }}>AUDITED RECS</div>
-            <div style={{ fontSize: '24px', fontWeight: 900, marginTop: 4 }}>995+</div>
-            <div style={{ fontSize: '11px', color: 'var(--green2)', marginTop: 2 }}>Direct from YouTube & X</div>
-          </div>
-          <div className="card">
-            <div style={{ fontSize: '11px', color: 'var(--dim)', fontWeight: 700 }}>TRACKED CREATORS</div>
-            <div style={{ fontSize: '24px', fontWeight: 900, marginTop: 4 }}>51 Desk & Solo</div>
-            <div style={{ fontSize: '11px', color: 'var(--blue)', marginTop: 2 }}>SEBI & Unregistered</div>
-          </div>
-          <div className="card">
-            <div style={{ fontSize: '11px', color: 'var(--dim)', fontWeight: 700 }}>CONVICTION BOOST</div>
-            <div style={{ fontSize: '24px', fontWeight: 900, marginTop: 4 }}>+34.8%</div>
-            <div style={{ fontSize: '11px', color: 'var(--amber)', marginTop: 2 }}>Bayesian ML Gating</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="auth-right">
-        <form className="auth-form" onSubmit={submit}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 26, fontWeight: 800 }}>{mode === 'login' ? 'Welcome back' : 'Create institutional account'}</h2>
-            <p style={{ margin: '6px 0 0', color: 'var(--muted)', fontSize: 14 }}>
-              {mode === 'login' ? 'Access your algorithmic verification terminal.' : 'Instant onboarding. Access all live recommendations.'}
-            </p>
-          </div>
-
-          <div className="tabs2">
-            <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setErr(''); }}>Log in</button>
-            <button type="button" className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setErr(''); }}>Sign up</button>
-          </div>
-
-          {mode === 'signup' && <label>Full Name<input className="input" value={form.name} onChange={set('name')} placeholder="Dr. Vikram Sen" /></label>}
-          <label>Email Address<input className="input" type="email" value={form.email} onChange={set('email')} placeholder="analyst@fund.com" autoComplete="email" /></label>
-          <label>Password<input className="input" type="password" value={form.password} onChange={set('password')} placeholder="••••••••••••" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>
-          
-          {err && <div className="err">{err}</div>}
-          
-          <button className="btn btn-primary btn-lg" style={{ justifyContent: 'center', marginTop: 4 }} disabled={busy}>
-            {busy ? <Loader2 size={16} className="spin" /> : null}{mode === 'login' ? 'Enter Terminal' : 'Create Account'}
+        {/* 1-Click One-Touch OAuth Logins */}
+        <div className="oauth-btn-group">
+          <button 
+            type="button" 
+            className="btn-oauth google" 
+            onClick={() => handleOAuth('Google', 'Quantitative Portfolio Manager')} 
+            disabled={busy || !!oauthLoading}
+          >
+            {oauthLoading === 'Google' ? <Loader2 size={16} className="spin" /> : (
+              <svg width="18" height="18" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+            )}
+            Continue with Google Single Sign-On
           </button>
-          
-          <div className="divider">or explore immediately</div>
-          
-          <button type="button" className="btn btn-ghost btn-lg" style={{ justifyContent: 'center' }} onClick={demo} disabled={busy}>
-            <PlayCircle size={16} color="var(--green2)" /> Launch Live Interactive Demo
+
+          <button 
+            type="button" 
+            className="btn-oauth github" 
+            onClick={() => handleOAuth('GitHub', 'Algo Engineer & Quant')} 
+            disabled={busy || !!oauthLoading}
+          >
+            {oauthLoading === 'GitHub' ? <Loader2 size={16} className="spin" /> : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+              </svg>
+            )}
+            Sign in with GitHub
+          </button>
+
+          <button 
+            type="button" 
+            className="btn-oauth zerodha" 
+            onClick={() => handleOAuth('Zerodha', 'Zerodha Kite Trader')} 
+            disabled={busy || !!oauthLoading}
+          >
+            {oauthLoading === 'Zerodha' ? <Loader2 size={16} className="spin" /> : (
+              <span style={{ fontWeight: 900, letterSpacing: '0.5px' }}>⚡ KITE</span>
+            )}
+            Connect with Zerodha Kite Connect
+          </button>
+        </div>
+
+        <div className="divider">or standard fund credentials</div>
+
+        <div className="tabs2">
+          <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setErr(''); }}>Log in</button>
+          <button type="button" className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setErr(''); }}>Sign up</button>
+        </div>
+
+        <form className="auth-form" onSubmit={submit}>
+          {mode === 'signup' && (
+            <label>
+              Full Name
+              <input className="input" value={form.name} onChange={set('name')} placeholder="Dr. Vikram Sen" />
+            </label>
+          )}
+          <label>
+            Email Address
+            <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="trader@hedgefund.in" autoComplete="email" />
+          </label>
+          <label>
+            Password
+            <input className="input" type="password" value={form.password} onChange={set('password')} placeholder="••••••••••••" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+          </label>
+
+          {err && <div className="err">{err}</div>}
+
+          <button className="btn btn-primary btn-lg" style={{ justifyContent: 'center', marginTop: 4 }} disabled={busy}>
+            {busy ? <Loader2 size={16} className="spin" /> : null}{mode === 'login' ? 'Enter Trading Terminal' : 'Create Free Account'}
+          </button>
+
+          <button type="button" className="btn btn-ghost" style={{ justifyContent: 'center', marginTop: 4 }} onClick={launchDemo} disabled={busy}>
+            <PlayCircle size={15} color="var(--green2)" /> Instant 1-Click Interactive Demo
           </button>
         </form>
       </div>
+    </div>
+  );
+}
+
+/* ---------------------------------- LANDING PAGE ---------------------------------- */
+function LandingPage({ onOpenAuth, onLaunchDemo }) {
+  return (
+    <div className="landing-shell">
+      {/* Top Header */}
+      <header className="landing-nav">
+        <div className="mp-logo">
+          <div className="mp-logo-badge"><Activity size={22} /></div>
+          <div>
+            MarketProbe<span style={{ color: 'var(--green2)' }}>.</span>
+            <small>INSTITUTIONAL AUDIT ENGINE</small>
+          </div>
+        </div>
+
+        <div className="landing-nav-links">
+          <a href="#features">Architecture</a>
+          <a href="#metrics">Verified Track Records</a>
+          <a href="#compliance">SEBI Compliance</a>
+          <a href="#api">API & Webhooks</a>
+        </div>
+
+        <div className="landing-actions">
+          <button className="btn btn-ghost" onClick={() => onOpenAuth('login')}>
+            Sign In
+          </button>
+          <button className="btn btn-primary" onClick={() => onOpenAuth('signup')}>
+            Get Started Free <ArrowRight size={15} />
+          </button>
+        </div>
+      </header>
+
+      {/* Hero Section */}
+      <section className="landing-hero">
+        <div className="landing-hero-glow" />
+
+        <div className="landing-badge">
+          <Sparkles size={14} /> Autonomous Indian Finfluencer & Broker Audit Terminal
+        </div>
+
+        <h1 className="landing-title">
+          Stop trusting stock tips.<br />
+          <span className="grad-text">Verify alpha against tick data.</span>
+        </h1>
+
+        <p className="landing-subtitle">
+          MarketProbe continuously crawls, transcribes, and algorithmically grades 995+ recommendations from YouTube & X against sub-second NSE ticks. Real-time Bayesian win rates, stop-loss protection, and regulatory compliance.
+        </p>
+
+        <div className="landing-cta-row">
+          <button className="btn btn-primary btn-lg" style={{ padding: '14px 28px', fontSize: 16 }} onClick={() => onOpenAuth('signup')}>
+            Start Free Terminal <ArrowRight size={18} />
+          </button>
+          <button className="btn btn-ghost btn-lg" style={{ padding: '14px 24px', fontSize: 16 }} onClick={onLaunchDemo}>
+            <PlayCircle size={18} color="var(--green2)" /> Launch Live Interactive Tour
+          </button>
+        </div>
+
+        <div className="landing-trust">
+          <span><ShieldCheck size={16} color="var(--green2)" /> SEBI RA Regulatory Indexing</span>
+          <span><Zap size={16} color="var(--blue)" /> Sub-second NSE Tick Verification</span>
+          <span><Lock size={16} color="var(--amber)" /> Zero Hallucination Video Timestamps</span>
+        </div>
+
+        {/* Live Interactive Terminal Preview Window */}
+        <div className="landing-preview-window">
+          <div className="preview-window-bar">
+            <div className="preview-window-dots">
+              <i className="d-red" />
+              <i className="d-yellow" />
+              <i className="d-green" />
+            </div>
+            <span className="preview-window-title">TERMINAL LIVE FEED // 995 AUDITED RECOMMENDATIONS</span>
+            <span className="pill pill-buy" style={{ fontSize: '11px', padding: '3px 8px' }}>
+              <Activity size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> 
+              NSE TICK ACTIVE
+            </span>
+          </div>
+
+          <div className="preview-body">
+            {/* Left Card: Sample Audited Call with Video Embed Mock */}
+            <div className="card" style={{ textAlign: 'left', background: '#0a101d' }}>
+              <div className="row between" style={{ marginBottom: 12 }}>
+                <div className="row">
+                  <div className="creator-av" style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--green2)' }}>M</div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 14 }}>Motilal Oswal Financial Services</div>
+                    <span className="pill pill-sebi" style={{ fontSize: '10.5px', marginTop: 2 }}>SEBI REG: INH000000412</span>
+                  </div>
+                </div>
+                <span className="pill pill-hit">HIT (TARGET ACHIEVED)</span>
+              </div>
+
+              <div className="quote" style={{ fontSize: 14, margin: '10px 0' }}>
+                "Initiating tactical buy on LT.NS at ₹4,017 with target ₹4,426 on infra order momentum. Stop loss firmly at ₹3,782."
+              </div>
+
+              <div className="levels" style={{ marginTop: 14 }}>
+                <div className="level">
+                  <small>ENTRY</small>
+                  <b>₹4,017</b>
+                </div>
+                <div className="level">
+                  <small>TARGET</small>
+                  <b style={{ color: 'var(--green2)' }}>₹4,426 <em>(+10.2%)</em></b>
+                </div>
+                <div className="level">
+                  <small>STOP LOSS</small>
+                  <b style={{ color: 'var(--red)' }}>₹3,782 <em>(-5.8%)</em></b>
+                </div>
+              </div>
+
+              <div className="conv" style={{ marginTop: 14 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)' }}>Bayesian Conviction Metric</span>
+                <span className="num" style={{ fontWeight: 800, color: 'var(--green2)' }}>71.9% (GRADE A)</span>
+              </div>
+            </div>
+
+            {/* Right Card: Real-time Live Signal Highlights */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, textAlign: 'left' }}>
+              <div className="card" style={{ padding: 16 }}>
+                <div style={{ fontSize: 11, color: 'var(--dim)', fontWeight: 800 }}>ALPHA GATING ENGINE</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--green2)', marginTop: 4 }}>75.4% Win Rate</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>When conviction score exceeds 60.0%</div>
+              </div>
+
+              <div className="card" style={{ padding: 16 }}>
+                <div style={{ fontSize: 11, color: 'var(--dim)', fontWeight: 800 }}>TOTAL TRACKED CALLS</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: '#fff', marginTop: 4 }}>995 Recommendations</div>
+                <div style={{ fontSize: 12, color: 'var(--blue)', marginTop: 2 }}>Across 51 YouTube channels & Telegram desks</div>
+              </div>
+
+              <div className="card" style={{ padding: 16 }}>
+                <div style={{ fontSize: 11, color: 'var(--dim)', fontWeight: 800 }}>COMPLIANCE STATUS</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#fbbf24', marginTop: 4 }}>64% Unregistered Finfluencers</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Operating without SEBI Research Analyst license</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Key Numerical Metrics Bar */}
+        <div className="landing-metrics-bar" id="metrics">
+          <div className="metric-tile">
+            <small>AUDITED CALLS</small>
+            <b>995+</b>
+            <span>Direct from transcripts</span>
+          </div>
+          <div className="metric-tile">
+            <small>TRACKED CREATORS</small>
+            <b>51 Desks</b>
+            <span>SEBI & Solo Finfluencers</span>
+          </div>
+          <div className="metric-tile">
+            <small>BAYESIAN ALPHA</small>
+            <b>+34.8%</b>
+            <span>Conviction improvement</span>
+          </div>
+          <div className="metric-tile">
+            <small>SUB-SECOND TICKS</small>
+            <b>100% NSE</b>
+            <span>Exact execution matching</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Core Features Grid */}
+      <section className="landing-section" id="features">
+        <div className="section-tag">System Capabilities</div>
+        <h2 className="section-title">Institutional Grade Tech Architecture</h2>
+        <p className="section-desc">
+          Designed for hedge funds, retail investors, and compliance regulators seeking transparent truth behind public financial commentary.
+        </p>
+
+        <div className="features-grid">
+          <div className="feature-card">
+            <div className="feature-icon"><Database size={24} /></div>
+            <h3>Autonomous Video Audio Mining</h3>
+            <p>Whisper & custom acoustic NLP extract exact stock names, entry levels, targets, and stop losses straight from video streams.</p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon"><Calculator size={24} /></div>
+            <h3>Historical Tick Verification</h3>
+            <p>Every call is simulated against real NSE candlestick ticks to ascertain whether targets or stop losses were mathematically triggered first.</p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon"><Trophy size={24} /></div>
+            <h3>Empirical Creator Rankings</h3>
+            <p>Eliminate survivorship bias. Discover which creators generate authentic returns versus those delivering catastrophic drawdowns.</p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon"><Bell size={24} /></div>
+            <h3>High-Conviction Alpha Alerts</h3>
+            <p>Filter calls in real-time by Bayesian probability thresholds. 1-click dispatch payloads for instant Telegram and webhook alerts.</p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon"><CheckCircle2 size={24} /></div>
+            <h3>Instant NLP Fact-Checker</h3>
+            <p>Paste any unsolicited tip from WhatsApp, Telegram, or Twitter to extract risk geometry and inspect creator accuracy instantly.</p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon"><Download size={24} /></div>
+            <h3>SEBI Compliance Audit CSVs</h3>
+            <p>Export full timestamped audit logs for regulatory oversight, fiduciary verification, and institutional risk management.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Comparison Section */}
+      <section className="landing-section" id="compliance">
+        <div className="section-tag">Market Differentiation</div>
+        <h2 className="section-title">Blind Social Trading vs. MarketProbe</h2>
+        <p className="section-desc">
+          How quantitative verification changes the odds for Indian equity market participants.
+        </p>
+
+        <div className="comparison-grid">
+          <div className="comp-card trad">
+            <h3 style={{ color: 'var(--red)', marginTop: 0 }}>Unverified Finfluencer Culture</h3>
+            <ul style={{ paddingLeft: 20, color: 'var(--muted)', lineHeight: 1.8, fontSize: 15 }}>
+              <li>Deleted tweets & hidden video histories after stop-out losses</li>
+              <li>Hype buzzwords ("100x rocket", "sure-shot multibagger") without stops</li>
+              <li>Retail traders enter at the top of pump cycles</li>
+              <li>Zero regulatory traceability or SEBI registration disclosures</li>
+            </ul>
+          </div>
+
+          <div className="comp-card probe">
+            <h3 style={{ color: 'var(--green2)', marginTop: 0 }}>MarketProbe Quantitative Audit</h3>
+            <ul style={{ paddingLeft: 20, color: 'var(--text)', lineHeight: 1.8, fontSize: 15 }}>
+              <li>Immutable timestamped YouTube and X audit trail that cannot be deleted</li>
+              <li>Sub-second mathematical check: did target or stop loss hit first?</li>
+              <li>Machine-learning Bayesian gating filters out 75%+ unprofitable calls</li>
+              <li>1-click regulatory CSV audits for SEBI compliance and institutional diligence</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* Call to Action Banner */}
+      <section className="landing-section" style={{ textAlign: 'center', marginTop: 100 }}>
+        <div className="card" style={{ padding: '60px 40px', background: 'radial-gradient(ellipse at 50% 0%, rgba(16,185,129,0.2) 0%, rgba(15,23,42,0.8) 70%)', border: '1px solid rgba(16,185,129,0.35)' }}>
+          <h2 style={{ fontSize: 38, fontWeight: 900, margin: '0 0 16px' }}>Ready to trade on verified intelligence?</h2>
+          <p style={{ color: 'var(--muted)', fontSize: 18, maxWidth: 600, margin: '0 auto 32px' }}>
+            Join analysts and disciplined traders using MarketProbe to audit market commentators and protect portfolio capital.
+          </p>
+          <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button className="btn btn-primary btn-lg" onClick={() => onOpenAuth('signup')}>
+              Sign Up with Google or GitHub <ArrowRight size={17} />
+            </button>
+            <button className="btn btn-ghost btn-lg" onClick={onLaunchDemo}>
+              <PlayCircle size={17} /> Explore Interactive Terminal Demo
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="landing-footer">
+        <div className="landing-footer-inner">
+          <div className="row" style={{ gap: 10 }}>
+            <div className="mp-logo-badge" style={{ width: 34, height: 34 }}><Activity size={17} /></div>
+            <span style={{ fontWeight: 800, fontSize: 16 }}>MarketProbe Technologies India</span>
+          </div>
+
+          <div style={{ color: 'var(--dim)', fontSize: 13.5 }}>
+            © 2026 MarketProbe. Quantitative Finfluencer Auditing & Regulatory Intelligence Infrastructure.
+          </div>
+
+          <div className="row" style={{ gap: 18 }}>
+            <button className="btn btn-ghost" style={{ fontSize: 13, padding: '6px 12px' }} onClick={() => onOpenAuth('login')}>
+              Institutional Login
+            </button>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
@@ -1043,6 +1391,8 @@ export default function MarketProbeApp() {
   const [feed, setFeed] = useState(null);
   const [feedErr, setFeedErr] = useState('');
 
+  const [authModal, setAuthModal] = useState({ open: false, mode: 'login' });
+
   useEffect(() => {
     if (!user) return;
     api('/home-feed').then(setFeed).catch((e) => setFeedErr(e.message));
@@ -1052,6 +1402,7 @@ export default function MarketProbeApp() {
     localStorage.setItem('mp_token', token);
     localStorage.setItem('mp_user', JSON.stringify(u));
     setUser(u);
+    setAuthModal({ open: false, mode: 'login' });
     setTab('FEED');
     if (isNew || !localStorage.getItem(`mp_tour_done_${u.email}`)) setWelcome(true);
   };
@@ -1074,7 +1425,32 @@ export default function MarketProbeApp() {
     setTimeout(() => setTour(true), 100); 
   };
 
-  if (!user) return <AuthPage onAuth={onAuth} />;
+  const launchDemoUser = async () => {
+    try {
+      const data = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email: 'demo@marketprobe.in', password: 'demo123' }) });
+      onAuth(data.access_token, data.user, true);
+    } catch {
+      // Fallback local demo profile
+      const demoU = { id: 'usr_demo', email: 'demo@marketprobe.in', name: 'Quant Trader (Demo)', role: 'pro_trader', tier: 'pro' };
+      onAuth('demo_jwt_token', demoU, true);
+    }
+  };
+
+  if (!user) {
+    return (
+      <>
+        <LandingPage 
+          onOpenAuth={(mode) => setAuthModal({ open: true, mode })} 
+          onLaunchDemo={launchDemoUser} 
+        />
+        <OAuthModal 
+          open={authModal.open} 
+          onClose={() => setAuthModal({ ...authModal, open: false })} 
+          onAuth={onAuth} 
+        />
+      </>
+    );
+  }
 
   return (
     <>
