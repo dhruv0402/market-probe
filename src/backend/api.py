@@ -515,6 +515,59 @@ def register_user(req: RegisterRequest):
         }
     }
 
+class OAuthRequest(BaseModel):
+    provider: str
+    code: Optional[str] = None
+    email: Optional[str] = None
+    name: Optional[str] = None
+    avatar: Optional[str] = None
+
+@app.post("/api/auth/oauth")
+def oauth_login(req: OAuthRequest):
+    provider = req.provider.lower()
+    email = req.email or f"trader_{provider}@marketprobe.finance"
+    name = req.name or f"{provider.capitalize()} Trader"
+    
+    user = USER_DB.get(email)
+    if not user:
+        user = {
+            "id": f"usr_{provider}_{int(time.time())}",
+            "email": email,
+            "name": name,
+            "password_hash": hash_password(f"oauth_{provider}_{time.time()}"),
+            "role": "pro_trader",
+            "tier": "pro",
+            "provider": provider,
+            "api_key": f"mp_live_{abs(hash(email))}"
+        }
+        USER_DB[email] = user
+    else:
+        user["provider"] = provider
+        if req.name:
+            user["name"] = req.name
+
+    token = create_jwt_token({
+        "sub": user["id"],
+        "email": user["email"],
+        "role": user["role"],
+        "tier": user["tier"],
+        "provider": provider
+    })
+    return {
+        "status": "success",
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "name": user["name"],
+            "role": user["role"],
+            "tier": user["tier"],
+            "provider": provider,
+            "api_key": user.get("api_key")
+        }
+    }
+
 @app.get("/api/auth/me")
 def get_current_user_profile(user: dict = Depends(get_current_user_optional)):
     return {
