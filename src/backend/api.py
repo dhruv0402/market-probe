@@ -39,7 +39,8 @@ from src.nlp.index_universe import get_index_tier, INDEX_BENCHMARKS
 from src.ingestion.daily_ingestion_service import run_daily_ingestion_job
 from src.backend.security import (
     create_jwt_token, verify_password, hash_password,
-    get_current_user_optional, require_auth, USER_DB
+    get_current_user_optional, require_auth, USER_DB,
+    get_user_by_email, save_user
 )
 from src.backend.rate_limiter import check_rate_limit
 from src.backend.cache import global_cache
@@ -445,19 +446,21 @@ class RegisterRequest(BaseModel):
 
 @app.post("/api/auth/login")
 def login_user(req: LoginRequest):
-    user = USER_DB.get(req.email)
+    user = get_user_by_email(req.email) or USER_DB.get(req.email)
     if not user:
         # Auto-create for seamless SaaS onboarding demo
         user = {
             "id": f"usr_{int(time.time())}",
-            "email": req.email,
+            "email": req.email.lower(),
             "name": req.email.split("@")[0].capitalize(),
             "password_hash": hash_password(req.password),
             "role": "pro_trader",
             "tier": "pro",
+            "provider": "email",
             "api_key": f"mp_live_{abs(hash(req.email))}"
         }
         USER_DB[req.email] = user
+        save_user(user)
     elif not verify_password(req.password, user.get("password_hash", "")):
         # Allow default demo password pass-through
         if req.password not in ["password", "demo123", "marketprobe"]:
@@ -484,18 +487,21 @@ def login_user(req: LoginRequest):
 
 @app.post("/api/auth/register")
 def register_user(req: RegisterRequest):
-    if req.email in USER_DB:
+    existing = get_user_by_email(req.email) or USER_DB.get(req.email)
+    if existing:
         raise HTTPException(status_code=400, detail="Account with this email already exists.")
     user = {
         "id": f"usr_{int(time.time())}",
-        "email": req.email,
+        "email": req.email.lower(),
         "name": req.name,
         "password_hash": hash_password(req.password),
         "role": "pro_trader",
         "tier": "pro",
+        "provider": "email",
         "api_key": f"mp_live_{abs(hash(req.email))}"
     }
     USER_DB[req.email] = user
+    save_user(user)
     token = create_jwt_token({
         "sub": user["id"],
         "email": user["email"],
@@ -525,10 +531,10 @@ class OAuthRequest(BaseModel):
 @app.post("/api/auth/oauth")
 def oauth_login(req: OAuthRequest):
     provider = req.provider.lower()
-    email = req.email or f"trader_{provider}@marketprobe.finance"
+    email = (req.email or f"trader_{provider}@marketprobe.finance").lower()
     name = req.name or f"{provider.capitalize()} Trader"
     
-    user = USER_DB.get(email)
+    user = get_user_by_email(email) or USER_DB.get(email)
     if not user:
         user = {
             "id": f"usr_{provider}_{int(time.time())}",
@@ -541,10 +547,12 @@ def oauth_login(req: OAuthRequest):
             "api_key": f"mp_live_{abs(hash(email))}"
         }
         USER_DB[email] = user
+        save_user(user)
     else:
         user["provider"] = provider
         if req.name:
             user["name"] = req.name
+        save_user(user)
 
     token = create_jwt_token({
         "sub": user["id"],
