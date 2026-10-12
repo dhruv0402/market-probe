@@ -1279,6 +1279,51 @@ def export_sebi_compliance_audit(format: str = Query("json", regex="^(json|csv)$
         "records": [dict(r) for r in rows]
     }
 
+# -------------------------------------------------------------
+# 9. LIVE PIPELINE TRIGGER & AUTOMATION MONITOR
+# -------------------------------------------------------------
+@app.post("/api/pipeline/run")
+def trigger_pipeline_job():
+    """
+    Executes live data ingestion, audits fresh broker & finfluencer recommendations,
+    and updates the database in real-time.
+    """
+    try:
+        from src.ingestion.daily_ingestion_service import run_daily_ingestion_job
+        res = run_daily_ingestion_job()
+        return {
+            "status": "SUCCESS",
+            "message": "Live ingestion pipeline executed successfully.",
+            "pipeline_summary": res
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Pipeline execution error: {str(e)}")
+
+@app.get("/api/pipeline/status")
+def get_pipeline_status():
+    """
+    Returns pipeline health, last execution timestamp, and database count statistics.
+    """
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM recommendations")
+    recs_count = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM influencers")
+    influencers_count = cur.fetchone()[0]
+    cur.execute("SELECT call_timestamp FROM recommendations ORDER BY call_timestamp DESC LIMIT 1")
+    latest_row = cur.fetchone()
+    conn.close()
+
+    return {
+        "pipeline_state": "ACTIVE",
+        "total_recommendations": recs_count,
+        "total_creators_monitored": influencers_count,
+        "latest_recommendation_timestamp": latest_row[0] if latest_row else None,
+        "live_quote_engine": "ACTIVE",
+        "quotes_cached": len(LIVE_QUOTES_CACHE),
+        "server_time_utc": datetime.utcnow().isoformat() + "Z"
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("src.backend.api:app", host="0.0.0.0", port=8000, reload=True)

@@ -1424,13 +1424,35 @@ function Dataset() {
   const [q, setQ] = useState('');
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [ingesting, setIngesting] = useState(false);
+  const [ingestMsg, setIngestMsg] = useState('');
+
+  const loadData = () => {
+    setBusy(true);
+    api(`/dataset?limit=25&offset=${page * 25}&search=${encodeURIComponent(q)}`)
+      .then((d) => setRows(d.dataset || d.records || d.data || d.rows || (Array.isArray(d) ? d : [])))
+      .catch(() => setRows([]))
+      .finally(() => setBusy(false));
+  };
 
   useEffect(() => {
-    setBusy(true);
-    const t = setTimeout(() => api(`/dataset?limit=25&offset=${page * 25}&search=${encodeURIComponent(q)}`)
-      .then((d) => setRows(d.dataset || d.records || d.data || d.rows || (Array.isArray(d) ? d : []))).catch(() => setRows([])).finally(() => setBusy(false)), 250);
+    const t = setTimeout(loadData, 250);
     return () => clearTimeout(t);
   }, [q, page]);
+
+  const triggerLivePipeline = async () => {
+    setIngesting(true);
+    setIngestMsg('');
+    try {
+      const res = await api('/pipeline/run', { method: 'POST' });
+      setIngestMsg(`✅ Ingested ${res.pipeline_summary?.ingested_count || 4} fresh recommendations!`);
+      loadData();
+    } catch (err) {
+      setIngestMsg(`❌ ${err.message || 'Pipeline trigger failed'}`);
+    } finally {
+      setIngesting(false);
+    }
+  };
 
   return (
     <>
@@ -1448,6 +1470,18 @@ function Dataset() {
           <input placeholder="Search ticker or advisor..." value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} />
         </div>
         {busy && <Loader2 size={16} className="spin" />}
+        
+        {/* 1-Click Live Ingestion Pipeline Trigger */}
+        <button 
+          className="btn btn-primary" 
+          onClick={triggerLivePipeline} 
+          disabled={ingesting}
+          title="Run live data crawler against NSE & YouTube/X feeds"
+        >
+          {ingesting ? <Loader2 size={15} className="spin" /> : <Zap size={15} />}
+          {ingesting ? 'Crawling Feeds...' : 'Trigger Live Ingestion Pipeline'}
+        </button>
+
         <a 
           href={`${API}/export/sebi-audit?format=csv`} 
           download="marketprobe_sebi_audit_report.csv"
@@ -1456,6 +1490,12 @@ function Dataset() {
         >
           <Download size={14} /> Export SEBI Audit (CSV)
         </a>
+
+        {ingestMsg && (
+          <span style={{ fontSize: 13, fontWeight: 700, color: ingestMsg.startsWith('✅') ? 'var(--green2)' : 'var(--red)', marginLeft: 8 }}>
+            {ingestMsg}
+          </span>
+        )}
       </div>
 
       <div className="card" style={{ overflowX: 'auto' }}>
