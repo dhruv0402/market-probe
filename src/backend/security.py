@@ -94,12 +94,67 @@ def init_user_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS user_alert_configs (
+                user_id TEXT PRIMARY KEY,
+                telegram_chat_id TEXT,
+                whatsapp_phone TEXT,
+                telegram_enabled BOOLEAN DEFAULT 0,
+                whatsapp_enabled BOOLEAN DEFAULT 0,
+                min_conviction REAL DEFAULT 60.0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         conn.commit()
         conn.close()
     except Exception as e:
         print(f"[SECURITY] Warning initializing user table: {e}")
 
 init_user_db()
+
+def get_user_alert_config(user_id: str) -> dict:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM user_alert_configs WHERE user_id = ?", (user_id,))
+        row = cur.fetchone()
+        conn.close()
+        if row:
+            return dict(row)
+    except Exception as e:
+        print(f"[SECURITY] Error getting alert config: {e}")
+    return {
+        "user_id": user_id,
+        "telegram_chat_id": "@marketprobe_alerts",
+        "whatsapp_phone": "+91 98765 43210",
+        "telegram_enabled": 1,
+        "whatsapp_enabled": 0,
+        "min_conviction": 65.0
+    }
+
+def update_user_alert_config(user_id: str, cfg: dict) -> dict:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute('''
+            INSERT OR REPLACE INTO user_alert_configs (user_id, telegram_chat_id, whatsapp_phone, telegram_enabled, whatsapp_enabled, min_conviction)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (
+            user_id,
+            cfg.get("telegram_chat_id", "@marketprobe_alerts"),
+            cfg.get("whatsapp_phone", ""),
+            1 if cfg.get("telegram_enabled") else 0,
+            1 if cfg.get("whatsapp_enabled") else 0,
+            float(cfg.get("min_conviction", 60.0))
+        ))
+        conn.commit()
+        conn.close()
+        return {"status": "success", "config": cfg}
+    except Exception as e:
+        print(f"[SECURITY] Error updating alert config: {e}")
+        return {"status": "error", "message": str(e)}
+
 
 def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
     try:

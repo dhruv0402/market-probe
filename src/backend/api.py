@@ -43,7 +43,8 @@ from src.backend.security import (
     get_user_by_email, save_user,
     get_user_watchlist, toggle_watchlist_item,
     get_user_saved_calls, toggle_saved_call,
-    record_subscription
+    record_subscription,
+    get_user_alert_config, update_user_alert_config
 )
 from src.backend.rate_limiter import check_rate_limit
 from src.backend.cache import global_cache
@@ -837,6 +838,26 @@ def toggle_saved(req: SavedCallToggleRequest, user: dict = Depends(require_auth)
     result = toggle_saved_call(user["id"], req.call_id)
     return {"status": "success", **result}
 
+# -------------------------------------------------------------
+# STEP 2B: TELEGRAM & WHATSAPP ALERT CHANNELS
+# -------------------------------------------------------------
+class AlertConfigRequest(BaseModel):
+    telegram_chat_id: Optional[str] = "@marketprobe_alerts"
+    whatsapp_phone: Optional[str] = ""
+    telegram_enabled: bool = True
+    whatsapp_enabled: bool = False
+    min_conviction: float = 65.0
+
+@app.get("/api/user/alerts/config")
+def get_alert_config(user: dict = Depends(require_auth)):
+    cfg = get_user_alert_config(user["id"])
+    return {"status": "success", "config": cfg}
+
+@app.post("/api/user/alerts/config")
+def save_alert_config(req: AlertConfigRequest, user: dict = Depends(require_auth)):
+    res = update_user_alert_config(user["id"], req.model_dump())
+    return {"status": "success", **res}
+
 @app.get("/api/health")
 @app.get("/health")
 def health_check():
@@ -945,7 +966,7 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
             r.risk_reward_ratio, r.outcome_status, r.actual_peak_return_pct, r.actual_max_drawdown_pct,
             r.raw_quote, r.call_timestamp, r.source_url, r.platform, r.video_id, r.video_title, r.thumbnail_url, r.timestamp_seconds, r.timestamp_str,
             r.tweet_id, r.telegram_channel, r.broker_desk,
-            i.name as creator_name, i.handle as creator_handle, i.is_sebi_registered, i.approx_subscribers
+            i.name as creator_name, i.handle as creator_handle, i.is_sebi_registered, i.sebi_reg_no, i.approx_subscribers
         FROM recommendations r
         LEFT JOIN influencers i ON r.influencer_id = i.id
         ORDER BY r.id DESC
@@ -981,6 +1002,13 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
         if min_conviction > 0 and ai_conviction < min_conviction:
             continue
         
+        # Zerodha Kite basket execution deep link
+        kite_action = "BUY" if (r["action"] or "").upper() == "BUY" else "SELL"
+        kite_url = f"https://kite.zerodha.com/connect/basket?tradingsymbol={t_clean}&exchange=NSE&transaction_type={kite_action}&order_type=LIMIT&price={round(entry, 2)}"
+        
+        is_sebi = bool(r["is_sebi_registered"])
+        sebi_risk = "LOW_RISK" if is_sebi else "UNREGISTERED_CAUTION"
+
         recent_tips.append({
             "id": r["id"],
             "ticker": t_clean,
@@ -1002,7 +1030,10 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
             "platform": platform,
             "creator_name": r["creator_name"] or ("Institutional Equity Desk" if platform == "Broker Research" else "Independent Analyst"),
             "creator_handle": r["creator_handle"] or ("@broker" if platform == "Broker Research" else "@analyst"),
-            "is_sebi": bool(r["is_sebi_registered"]),
+            "is_sebi": is_sebi,
+            "sebi_reg_no": r["sebi_reg_no"] if is_sebi else None,
+            "sebi_risk_grade": sebi_risk,
+            "kite_basket_url": kite_url,
             "quote": r["raw_quote"],
             "source_url": src_url,
             "video_id": vid_id,

@@ -736,7 +736,15 @@ function TipCard({ t, first }) {
             <div>
               <div className="row" style={{ fontWeight: 800, fontSize: 14 }}>
                 {t.creator_name}
-                {t.is_sebi && <ShieldCheck size={14} color="var(--green)" title="SEBI Registered Financial Advisor" />}
+                {t.is_sebi ? (
+                  <span className="pill pill-buy" style={{ fontSize: 10, padding: '2px 6px', gap: 4 }} title={`Verified SEBI Reg No: ${t.sebi_reg_no || 'Registered'}`}>
+                    <ShieldCheck size={11} /> SEBI RA {t.sebi_reg_no ? `· ${t.sebi_reg_no}` : 'REGISTERED'}
+                  </span>
+                ) : (
+                  <span className="pill pill-miss" style={{ fontSize: 10, padding: '2px 6px', gap: 4 }} title="Unregistered Social Creator - Higher Execution Risk">
+                    <AlertTriangle size={11} /> UNREGISTERED
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: 11.5, color: 'var(--dim)' }}>
                 {t.platform} · {String(t.timestamp || '').slice(0, 10)}
@@ -781,6 +789,24 @@ function TipCard({ t, first }) {
               {fmt(conv)}%
             </b>
           </div>
+        </div>
+
+        {/* 1-Click Zerodha Kite & Terminal Execution */}
+        <div className="row between" style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+          <span style={{ fontSize: 11.5, color: 'var(--dim)' }}>
+            Exchange: <b>NSE EQ</b>
+          </span>
+          <a
+            href={t.kite_basket_url || `https://kite.zerodha.com/connect/basket?tradingsymbol=${t.ticker}&exchange=NSE&transaction_type=${t.action}&order_type=LIMIT&price=${t.entry_price}`}
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-primary"
+            style={{ padding: '6px 14px', fontSize: 12.5, gap: 6, textDecoration: 'none' }}
+            title="Pre-fills limit order directly on Zerodha Kite Connect"
+          >
+            <span>⚡ Trade on Kite</span>
+            <ExternalLink size={12} />
+          </a>
         </div>
       </div>
     </div>
@@ -1095,19 +1121,55 @@ function AlphaAlerts() {
 /* -------------------------------- RANKINGS -------------------------------- */
 function Rankings() {
   const [rows, setRows] = useState(null);
+  const [filterMode, setFilterMode] = useState('ALL'); // 'ALL', 'SEBI_ONLY', 'HALL_OF_SHAME'
   const [err, setErr] = useState('');
   useEffect(() => { api('/leaderboard').then((d) => setRows(d.leaderboard || [])).catch((e) => setErr(e.message)); }, []);
   
-  const top3 = rows?.slice(0, 3) || [];
+  const filteredRows = useMemo(() => {
+    if (!rows) return [];
+    if (filterMode === 'SEBI_ONLY') return rows.filter(r => r.is_sebi);
+    if (filterMode === 'HALL_OF_SHAME') {
+      // Sort by worst win rate and highest drawdown
+      return [...rows].sort((a, b) => (a.win_rate - b.win_rate) || (a.max_drawdown - b.max_drawdown));
+    }
+    return rows;
+  }, [rows, filterMode]);
+
+  const top3 = filteredRows.slice(0, 3);
 
   return (
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow"><Trophy size={13} /> Verified Leaderboard</div>
-          <h1 className="mp-h1">Influencer & Broker Rankings</h1>
+          <div className="eyebrow"><Trophy size={13} /> Verified Leaderboard & Accountability</div>
+          <h1 className="mp-h1">Influencer Rankings & Hall of Shame</h1>
           <p className="mp-sub">Ranked rigorously by empirical accuracy, verified profit factors, and risk control — never subscriber count.</p>
         </div>
+      </div>
+
+      {/* Filter and Mode Toggles */}
+      <div className="row" style={{ gap: 10, marginBottom: 20 }}>
+        <button 
+          className={`btn ${filterMode === 'ALL' ? 'btn-primary' : 'btn-ghost'}`}
+          onClick={() => setFilterMode('ALL')}
+          style={{ fontSize: 13, padding: '8px 16px' }}
+        >
+          🏆 All Verified Creators
+        </button>
+        <button 
+          className={`btn ${filterMode === 'SEBI_ONLY' ? 'btn-primary' : 'btn-ghost'}`}
+          onClick={() => setFilterMode('SEBI_ONLY')}
+          style={{ fontSize: 13, padding: '8px 16px' }}
+        >
+          <ShieldCheck size={14} /> SEBI Registered Desks Only
+        </button>
+        <button 
+          className={`btn ${filterMode === 'HALL_OF_SHAME' ? 'btn-primary' : 'btn-ghost'}`}
+          onClick={() => setFilterMode('HALL_OF_SHAME')}
+          style={{ fontSize: 13, padding: '8px 16px', borderColor: filterMode === 'HALL_OF_SHAME' ? '#fb7185' : undefined, background: filterMode === 'HALL_OF_SHAME' ? '#e11d48' : undefined }}
+        >
+          ⚠️ Finfluencer "Hall of Shame" (Lowest Accuracy & High Drawdown)
+        </button>
       </div>
 
       {err && <div className="err">{err}</div>}
@@ -1134,7 +1196,7 @@ function Rankings() {
 
       <div className="card" data-tour="rankings" style={{ overflowX: 'auto', minHeight: 200 }}>
         {!rows && !err && <div className="row" style={{ justifyContent: 'center', padding: 60 }}><Loader2 className="spin" /></div>}
-        {rows && (
+        {filteredRows && (
           <table className="mp">
             <thead>
               <tr>
@@ -1150,7 +1212,7 @@ function Rankings() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, i) => (
+              {filteredRows.map((r, i) => (
                 <tr key={r.id}>
                   <td><span className={`rank ${i < 3 ? `r${i+1}` : ''}`}>{i + 1}</span></td>
                   <td>
@@ -1337,10 +1399,43 @@ function Checker() {
           onChange={(e) => setText(e.target.value)} 
           placeholder="e.g. TATAMOTORS buy above 950, tgt 1020, SL 920" 
         />
-        <div className="row between" style={{ marginTop: 14 }}>
-          <span style={{ fontSize: 12.5, color: 'var(--dim)' }}>Extracts ticker symbol, action, entry, target, and stop-loss dynamically.</span>
+        <div className="row between" style={{ marginTop: 14, flexWrap: 'wrap', gap: 10 }}>
+          <div className="row" style={{ gap: 8 }}>
+            <span style={{ fontSize: 12, color: 'var(--dim)' }}>Supported:</span>
+            <span className="pill pill-buy" style={{ fontSize: 10 }}>English</span>
+            <span className="pill pill-open" style={{ fontSize: 10 }}>Hinglish / Hindi Audio Transcripts</span>
+          </div>
           <button className="btn btn-primary" onClick={check} disabled={busy} style={{ padding: '10px 20px' }}>
             {busy ? <Loader2 size={16} className="spin" /> : <CheckCircle2 size={16} />} Verify Stock Tip
+          </button>
+        </div>
+
+        {/* Quick Hinglish / English Presets */}
+        <div className="row" style={{ marginTop: 14, gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11.5, color: 'var(--dim)' }}>Try real samples:</span>
+          <button 
+            type="button" 
+            className="btn btn-ghost" 
+            style={{ fontSize: 11.5, padding: '3px 8px' }}
+            onClick={() => setText('TATAMOTORS breaking out above 970 with target 1080 and SL at 930. Heavy delivery volumes!')}
+          >
+            English Breakout
+          </button>
+          <button 
+            type="button" 
+            className="btn btn-ghost" 
+            style={{ fontSize: 11.5, padding: '3px 8px' }}
+            onClick={() => setText('RELIANCE kal 1160 ke upar buy karo, target 1300 aur stop loss 1120 rakhna')}
+          >
+            🇮🇳 Hinglish YouTube Forward
+          </button>
+          <button 
+            type="button" 
+            className="btn btn-ghost" 
+            style={{ fontSize: 11.5, padding: '3px 8px' }}
+            onClick={() => setText('HDFCBANK long above 710 target 780 sl 685 strict stoploss')}
+          >
+            Telegram Desk Call
           </button>
         </div>
       </div>
@@ -1426,6 +1521,29 @@ function WatchlistComponent() {
     setNewSym('');
   };
 
+  const [alertConfig, setAlertConfig] = useState({ telegram_enabled: true, whatsapp_enabled: false, telegram_chat_id: '@marketprobe_alerts', whatsapp_phone: '+91 98765 43210' });
+  const [alertSavedMsg, setAlertSavedMsg] = useState('');
+
+  useEffect(() => {
+    api('/user/alerts/config')
+      .then((d) => { if (d.config) setAlertConfig(d.config); })
+      .catch(() => {});
+  }, []);
+
+  const saveAlerts = async (newCfg) => {
+    setAlertConfig(newCfg);
+    try {
+      await api('/user/alerts/config', {
+        method: 'POST',
+        body: JSON.stringify(newCfg)
+      });
+      setAlertSavedMsg('Alert channels saved!');
+      setTimeout(() => setAlertSavedMsg(''), 3000);
+    } catch (e) {
+      setAlertSavedMsg('Failed to update alert channel.');
+    }
+  };
+
   return (
     <div style={{ width: '100%' }}>
       <div className="page-head">
@@ -1433,6 +1551,40 @@ function WatchlistComponent() {
           <div className="eyebrow"><Bookmark size={13} /> Dedicated Portfolio Tracking</div>
           <h1 className="mp-h1">My Audited Watchlist</h1>
           <p className="mp-sub">Real-time exchange quote synchronization and Finfluencer consensus monitoring for your portfolio.</p>
+        </div>
+      </div>
+
+      {/* Real-time WhatsApp & Telegram Alert Webhook Controls */}
+      <div className="card" style={{ padding: '16px 22px', marginBottom: 20, background: 'rgba(56, 189, 248, 0.05)', borderColor: 'rgba(56, 189, 248, 0.25)' }}>
+        <div className="row between" style={{ flexWrap: 'wrap', gap: 14 }}>
+          <div>
+            <div className="row" style={{ gap: 8, fontWeight: 800, fontSize: 14 }}>
+              <Bell size={16} color="var(--blue)" />
+              <span>Instant Indian Finfluencer Breakout Dispatch</span>
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>
+              Receive instant alerts on Telegram & WhatsApp when top creators post calls on your tracked symbols.
+            </div>
+          </div>
+          <div className="row" style={{ gap: 14, flexWrap: 'wrap' }}>
+            <label className="row" style={{ gap: 8, fontSize: 13, cursor: 'pointer', userSelect: 'none' }}>
+              <input 
+                type="checkbox" 
+                checked={alertConfig.telegram_enabled} 
+                onChange={(e) => saveAlerts({ ...alertConfig, telegram_enabled: e.target.checked })} 
+              />
+              <span>Telegram Bot ({alertConfig.telegram_chat_id || '@alerts'})</span>
+            </label>
+            <label className="row" style={{ gap: 8, fontSize: 13, cursor: 'pointer', userSelect: 'none' }}>
+              <input 
+                type="checkbox" 
+                checked={alertConfig.whatsapp_enabled} 
+                onChange={(e) => saveAlerts({ ...alertConfig, whatsapp_enabled: e.target.checked })} 
+              />
+              <span>WhatsApp Alerts</span>
+            </label>
+            {alertSavedMsg && <span style={{ fontSize: 12, color: 'var(--green2)', fontWeight: 700 }}>{alertSavedMsg}</span>}
+          </div>
         </div>
       </div>
 
@@ -1517,11 +1669,21 @@ function WatchlistComponent() {
                   </div>
                 </div>
 
-                <div className="row between" style={{ fontSize: 11.5, color: 'var(--dim)', paddingTop: 8, borderTop: '1px solid var(--line)' }}>
+                <div className="row between" style={{ fontSize: 11.5, color: 'var(--dim)', paddingTop: 10, borderTop: '1px solid var(--line)' }}>
                   <span className="row" style={{ gap: 4 }}>
                     <ShieldCheck size={12} color="var(--green2)" /> Verified Tick Replay
                   </span>
-                  <span>Source: {it.exchange_source || 'LIVE_NSE'}</span>
+                  <a
+                    href={`https://kite.zerodha.com/connect/basket?tradingsymbol=${it.symbol}&exchange=NSE&transaction_type=BUY&order_type=LIMIT&price=${it.current_price || ''}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-primary"
+                    style={{ padding: '4px 10px', fontSize: 11.5, gap: 5, textDecoration: 'none' }}
+                    title="Pre-fills order on Zerodha Kite"
+                  >
+                    <span>⚡ Trade on Kite</span>
+                    <ExternalLink size={11} />
+                  </a>
                 </div>
               </div>
             );
