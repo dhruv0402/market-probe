@@ -71,7 +71,7 @@ function LiveTape() {
         .catch(() => {});
     };
     fetchQuotes();
-    const iv = setInterval(fetchQuotes, 5000);
+    const iv = setInterval(fetchQuotes, 1500);
     return () => { active = false; clearInterval(iv); };
   }, []);
 
@@ -1611,7 +1611,17 @@ export default function MarketProbeApp() {
 
   useEffect(() => {
     if (!user) return;
-    api('/home-feed').then(setFeed).catch((e) => setFeedErr(e.message));
+    let active = true;
+    const fetchFeed = () => {
+      api('/home-feed')
+        .then((data) => { if (active) setFeed(data); })
+        .catch((e) => { if (active && !feed) setFeedErr(e.message); });
+    };
+
+    fetchFeed();
+    // Auto-refresh recommendations feed every 8 seconds to catch fresh ingested calls
+    const iv = setInterval(fetchFeed, 8000);
+    return () => { active = false; clearInterval(iv); };
   }, [user]);
 
   const onAuth = (token, u, isNew) => {
