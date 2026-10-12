@@ -315,6 +315,8 @@ function ThemeControls({ theme, setTheme, glow, setGlow }) {
 
 /* ---------------------------------- LANDING PAGE ---------------------------------- */
 function LandingPage({ onOpenAuth, onLaunchDemo, theme, setTheme, glow, setGlow }) {
+  const [previewTab, setPreviewTab] = useState('CALL');
+
   return (
     <div className="landing-shell">
       {/* Top Header */}
@@ -385,7 +387,32 @@ function LandingPage({ onOpenAuth, onLaunchDemo, theme, setTheme, glow, setGlow 
               <i className="d-yellow" />
               <i className="d-green" />
             </div>
-            <span className="preview-window-title">TERMINAL LIVE FEED // 995 AUDITED RECOMMENDATIONS</span>
+            
+            {/* Interactive Preview Tabs */}
+            <div className="preview-tab-controls">
+              <button 
+                type="button" 
+                className={`preview-tab-btn ${previewTab === 'CALL' ? 'active' : ''}`}
+                onClick={() => setPreviewTab('CALL')}
+              >
+                <Rss size={13} /> Audited Rec
+              </button>
+              <button 
+                type="button" 
+                className={`preview-tab-btn ${previewTab === 'RANKINGS' ? 'active' : ''}`}
+                onClick={() => setPreviewTab('RANKINGS')}
+              >
+                <Trophy size={13} /> Creator Win-Rates
+              </button>
+              <button 
+                type="button" 
+                className={`preview-tab-btn ${previewTab === 'CHECKER' ? 'active' : ''}`}
+                onClick={() => setPreviewTab('CHECKER')}
+              >
+                <CheckCircle2 size={13} /> Instant NLP Checker
+              </button>
+            </div>
+
             <span className="pill pill-buy" style={{ fontSize: '11px', padding: '3px 8px' }}>
               <Activity size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> 
               NSE TICK ACTIVE
@@ -393,64 +420,152 @@ function LandingPage({ onOpenAuth, onLaunchDemo, theme, setTheme, glow, setGlow 
           </div>
 
           <div className="preview-body">
-            {/* Left Card: Sample Audited Call with Video Embed Mock */}
-            <div className="card" style={{ textAlign: 'left', background: '#0a101d' }}>
-              <div className="row between" style={{ marginBottom: 12 }}>
-                <div className="row">
-                  <div className="creator-av" style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--green2)' }}>M</div>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 14 }}>Motilal Oswal Financial Services</div>
-                    <span className="pill pill-sebi" style={{ fontSize: '10.5px', marginTop: 2 }}>SEBI REG: INH000000412</span>
+            {previewTab === 'CALL' && (
+              <>
+                {/* Left Card: Sample Audited Call */}
+                <div className="card preview-glass-card" style={{ textAlign: 'left' }}>
+                  <div className="row between" style={{ marginBottom: 12 }}>
+                    <div className="row">
+                      <div className="creator-av" style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--green2)' }}>M</div>
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: 14 }}>Motilal Oswal Financial Services</div>
+                        <span className="pill pill-sebi" style={{ fontSize: '10.5px', marginTop: 2 }}>SEBI REG: INH000000412</span>
+                      </div>
+                    </div>
+                    <span className="pill pill-hit">HIT (TARGET ACHIEVED)</span>
+                  </div>
+
+                  <div className="quote" style={{ fontSize: 14, margin: '10px 0' }}>
+                    "Initiating tactical buy on LT.NS at ₹4,017 with target ₹4,426 on infra order momentum. Stop loss firmly at ₹3,782."
+                  </div>
+
+                  <div className="levels" style={{ marginTop: 14 }}>
+                    <div className="level">
+                      <small>ENTRY</small>
+                      <b>₹4,017</b>
+                    </div>
+                    <div className="level">
+                      <small>TARGET</small>
+                      <b style={{ color: 'var(--green2)' }}>₹4,426 <em>(+10.2%)</em></b>
+                    </div>
+                    <div className="level">
+                      <small>STOP LOSS</small>
+                      <b style={{ color: 'var(--red)' }}>₹3,782 <em>(-5.8%)</em></b>
+                    </div>
+                  </div>
+
+                  <div className="conv" style={{ marginTop: 14 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)' }}>Bayesian Conviction Metric</span>
+                    <span className="num" style={{ fontWeight: 800, color: 'var(--green2)' }}>71.9% (GRADE A)</span>
                   </div>
                 </div>
-                <span className="pill pill-hit">HIT (TARGET ACHIEVED)</span>
-              </div>
 
-              <div className="quote" style={{ fontSize: 14, margin: '10px 0' }}>
-                "Initiating tactical buy on LT.NS at ₹4,017 with target ₹4,426 on infra order momentum. Stop loss firmly at ₹3,782."
-              </div>
+                {/* Right Card: Real-time Live Signal Highlights */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, textAlign: 'left' }}>
+                  <div className="card preview-glass-card" style={{ padding: 16 }}>
+                    <div style={{ fontSize: 11, color: 'var(--dim)', fontWeight: 800 }}>ALPHA GATING ENGINE</div>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--green2)', marginTop: 4 }}>75.4% Win Rate</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>When conviction score exceeds 60.0%</div>
+                  </div>
 
-              <div className="levels" style={{ marginTop: 14 }}>
-                <div className="level">
-                  <small>ENTRY</small>
-                  <b>₹4,017</b>
+                  <div className="card preview-glass-card" style={{ padding: 16 }}>
+                    <div style={{ fontSize: 11, color: 'var(--dim)', fontWeight: 800 }}>TOTAL TRACKED CALLS</div>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--text)', marginTop: 4 }}>995 Recommendations</div>
+                    <div style={{ fontSize: 12, color: 'var(--blue)', marginTop: 2 }}>Across 51 YouTube channels & Telegram desks</div>
+                  </div>
+
+                  <div className="card preview-glass-card" style={{ padding: 16 }}>
+                    <div style={{ fontSize: 11, color: 'var(--dim)', fontWeight: 800 }}>COMPLIANCE STATUS</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--amber)', marginTop: 4 }}>64% Unregistered Finfluencers</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Operating without SEBI Research Analyst license</div>
+                  </div>
                 </div>
-                <div className="level">
-                  <small>TARGET</small>
-                  <b style={{ color: 'var(--green2)' }}>₹4,426 <em>(+10.2%)</em></b>
+              </>
+            )}
+
+            {previewTab === 'RANKINGS' && (
+              <div className="card preview-glass-card" style={{ gridColumn: 'span 2', textAlign: 'left', padding: 20 }}>
+                <div className="row between" style={{ marginBottom: 14 }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>Audited Finfluencer Leaderboard</h3>
+                    <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 13 }}>Ranked by verified exchange tick win-rate (survivorship bias removed).</p>
+                  </div>
+                  <span className="pill pill-sebi">LIVE REGISTRY</span>
                 </div>
-                <div className="level">
-                  <small>STOP LOSS</small>
-                  <b style={{ color: 'var(--red)' }}>₹3,782 <em>(-5.8%)</em></b>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="mp">
+                    <thead>
+                      <tr>
+                        <th>Advisor</th>
+                        <th>Status</th>
+                        <th>Audited Recs</th>
+                        <th>Win Rate</th>
+                        <th>Risk / Reward</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><b>Motilal Oswal Financial Services</b></td>
+                        <td><span className="pill pill-sebi">SEBI Reg</span></td>
+                        <td className="num">142</td>
+                        <td className="num" style={{ color: 'var(--green2)', fontWeight: 800 }}>64.8%</td>
+                        <td className="num">2.4 : 1</td>
+                      </tr>
+                      <tr>
+                        <td><b>ICICI Direct Research</b></td>
+                        <td><span className="pill pill-sebi">SEBI Reg</span></td>
+                        <td className="num">118</td>
+                        <td className="num" style={{ color: 'var(--green2)', fontWeight: 800 }}>61.2%</td>
+                        <td className="num">2.1 : 1</td>
+                      </tr>
+                      <tr>
+                        <td><b>Abhishek Kar</b></td>
+                        <td><span className="pill" style={{ background: 'rgba(244,63,94,0.1)', color: '#fb7185' }}>Unregistered</span></td>
+                        <td className="num">86</td>
+                        <td className="num" style={{ color: '#fb7185', fontWeight: 800 }}>38.4%</td>
+                        <td className="num">1.3 : 1</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
+            )}
 
-              <div className="conv" style={{ marginTop: 14 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)' }}>Bayesian Conviction Metric</span>
-                <span className="num" style={{ fontWeight: 800, color: 'var(--green2)' }}>71.9% (GRADE A)</span>
+            {previewTab === 'CHECKER' && (
+              <div className="card preview-glass-card" style={{ gridColumn: 'span 2', textAlign: 'left', padding: 22 }}>
+                <div className="row between" style={{ marginBottom: 14 }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>Sub-2ms Financial Tip Parser</h3>
+                    <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 13 }}>Paste raw social text — extract symbols, levels, and check historical win rate.</p>
+                  </div>
+                  <span className="pill pill-buy">AI NLP READY</span>
+                </div>
+                <div style={{ background: 'var(--panel2)', padding: 14, borderRadius: 10, border: '1px solid var(--line2)', marginBottom: 14 }}>
+                  <div style={{ fontSize: 12, color: 'var(--dim)', fontWeight: 700, marginBottom: 4 }}>SAMPLE PARSED INPUT:</div>
+                  <div style={{ fontStyle: 'italic', fontSize: 14, color: 'var(--text)' }}>
+                    "TATAMOTORS breaking out above 970 with target 1080 and SL at 930. Heavy delivery volumes seen today!"
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                  <div className="level" style={{ borderRadius: 8 }}>
+                    <small>TICKER</small>
+                    <b>TATAMOTORS.NS</b>
+                  </div>
+                  <div className="level" style={{ borderRadius: 8 }}>
+                    <small>ENTRY</small>
+                    <b>₹970.00</b>
+                  </div>
+                  <div className="level" style={{ borderRadius: 8 }}>
+                    <small>TARGET</small>
+                    <b style={{ color: 'var(--green2)' }}>₹1,080.00 (+11.3%)</b>
+                  </div>
+                  <div className="level" style={{ borderRadius: 8 }}>
+                    <small>CONVICTION</small>
+                    <b style={{ color: 'var(--green2)' }}>72.0% (APPROVED)</b>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            {/* Right Card: Real-time Live Signal Highlights */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, textAlign: 'left' }}>
-              <div className="card" style={{ padding: 16 }}>
-                <div style={{ fontSize: 11, color: 'var(--dim)', fontWeight: 800 }}>ALPHA GATING ENGINE</div>
-                <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--green2)', marginTop: 4 }}>75.4% Win Rate</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>When conviction score exceeds 60.0%</div>
-              </div>
-
-              <div className="card" style={{ padding: 16 }}>
-                <div style={{ fontSize: 11, color: 'var(--dim)', fontWeight: 800 }}>TOTAL TRACKED CALLS</div>
-                <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--text)', marginTop: 4 }}>995 Recommendations</div>
-                <div style={{ fontSize: 12, color: 'var(--blue)', marginTop: 2 }}>Across 51 YouTube channels & Telegram desks</div>
-              </div>
-
-              <div className="card" style={{ padding: 16 }}>
-                <div style={{ fontSize: 11, color: 'var(--dim)', fontWeight: 800 }}>COMPLIANCE STATUS</div>
-                <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--amber)', marginTop: 4 }}>64% Unregistered Finfluencers</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Operating without SEBI Research Analyst license</div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
