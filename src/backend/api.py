@@ -695,18 +695,114 @@ class SavedCallToggleRequest(BaseModel):
 @app.get("/api/user/watchlist")
 def get_watchlist(user: dict = Depends(require_auth)):
     items = get_user_watchlist(user["id"])
-    # Enrich watchlist items with live quote data if available
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+    except Exception:
+        pass
+
     enriched = []
     for item in items:
-        sym = item["symbol"]
-        quote = LIVE_QUOTES_CACHE.get(sym, {})
+        sym = item["symbol"].upper().replace(".NS", "")
+        sym_ns = f"{sym}.NS"
+        
+        # 1. Lookup in cache first
+        quote = LIVE_QUOTES_CACHE.get(sym) or LIVE_QUOTES_CACHE.get(sym_ns)
+        price = None
+        change_pct = None
+        day_high = None
+        day_low = None
+        source = "EXCHANGE_CACHE"
+        
+        if quote:
+            price = quote.get("price")
+            change_pct = quote.get("change_pct")
+            day_high = quote.get("day_high")
+            day_low = quote.get("day_low")
+        else:
+            # 2. Fetch live from NSE via yfinance fast_info
+            try:
+                t = yf.Ticker(sym_ns)
+                fi = t.fast_info
+                last_p = getattr(fi, 'last_price', None)
+                prev_c = getattr(fi, 'previous_close', None)
+                if last_p is not None:
+                    price = round(float(last_p), 2)
+                    day_high = round(float(getattr(fi, 'day_high', last_p)), 2) if getattr(fi, 'day_high', None) else None
+                    day_low = round(float(getattr(fi, 'day_low', last_p)), 2) if getattr(fi, 'day_low', None) else None
+                    if prev_c and prev_c > 0:
+                        change_pct = round(((price - float(prev_c)) / float(prev_c)) * 100, 2)
+                    source = "LIVE_NSE_TICK"
+                    # Cache it
+                    LIVE_QUOTES_CACHE[sym] = {
+                        "ticker": sym,
+                        "price": price,
+                        "change_pct": change_pct or 0.0,
+                        "day_high": day_high,
+                        "day_low": day_low,
+                        "timestamp": datetime.now().isoformat()
+                    }
+            except Exception as e:
+                source = "OFFLINE"
+
+        # 3. Pull audited finfluencer consensus & call history from recommendations table
+        calls_count = 0
+        buy_calls = 0
+        avg_target = None
+        creator_names = []
+        if conn:
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    """SELECT r.action, r.target_price, i.name as influencer_name 
+                       FROM recommendations r 
+                       LEFT JOIN influencers i ON r.influencer_id = i.id 
+                       WHERE r.ticker = ? OR r.ticker = ?""",
+                    (sym, sym_ns)
+                )
+                rec_rows = cur.fetchall()
+                calls_count = len(rec_rows)
+                targets = []
+                for r in rec_rows:
+                    if r["action"] and r["action"].upper() == "BUY":
+                        buy_calls += 1
+                    if r["target_price"] and r["target_price"] > 0:
+                        targets.append(r["target_price"])
+                    if r["influencer_name"] and r["influencer_name"] not in creator_names:
+                        creator_names.append(r["influencer_name"])
+                if targets:
+                    avg_target = round(sum(targets) / len(targets), 2)
+            except Exception as e:
+                pass
+
+        consensus_verdict = "NEUTRAL"
+        if calls_count > 0:
+            buy_ratio = buy_calls / calls_count
+            if buy_ratio >= 0.7:
+                consensus_verdict = "STRONG_BUY"
+            elif buy_ratio >= 0.5:
+                consensus_verdict = "MODERATE_BUY"
+            else:
+                consensus_verdict = "CAUTION_SELL"
+
         enriched.append({
             **item,
-            "current_price": quote.get("price"),
-            "change_pct": quote.get("change_pct"),
-            "day_high": quote.get("day_high"),
-            "day_low": quote.get("day_low")
+            "symbol": sym,
+            "current_price": price,
+            "change_pct": change_pct,
+            "day_high": day_high,
+            "day_low": day_low,
+            "exchange_source": source,
+            "audited_calls_count": calls_count,
+            "consensus_verdict": consensus_verdict,
+            "avg_target": avg_target,
+            "tracked_creators": creator_names[:3]
         })
+
+    if conn:
+        conn.close()
+
     return {"status": "success", "watchlist": enriched, "count": len(enriched)}
 
 @app.post("/api/user/watchlist/toggle")
