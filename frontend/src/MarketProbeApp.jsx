@@ -5,7 +5,7 @@ import {
   ExternalLink, Zap, Database, TrendingUp, TrendingDown, 
   Layers, ChevronRight, BarChart3, AlertTriangle, Sparkles,
   Bell, Download, ArrowRight, Lock, Key, Users, Check, X, Shield, Globe,
-  Sun, Moon, Palette
+  Sun, Moon, Palette, Bookmark, CreditCard, Star
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import Tour from './Tour.jsx';
@@ -30,12 +30,14 @@ const inr = (n) => (n == null ? '—' : '₹' + fmt(n));
 
 const TABS = [
   { id: 'FEED', label: 'Feed', icon: Rss },
+  { id: 'WATCHLIST', label: 'My Watchlist', icon: Bookmark },
   { id: 'STOCKS', label: 'Stocks & Sectors', icon: Layers },
   { id: 'ALERTS', label: 'Alpha Alerts', icon: Bell },
   { id: 'RANKINGS', label: 'Rankings', icon: Trophy },
   { id: 'SIMULATOR', label: 'P&L Simulator', icon: Calculator },
   { id: 'CHECKER', label: 'Fact-Check', icon: CheckCircle2 },
   { id: 'DATASET', label: 'Dataset', icon: Database },
+  { id: 'BILLING', label: 'Plans & Billing', icon: CreditCard },
   { id: 'HOW', label: 'How it works', icon: BookOpen },
 ];
 
@@ -1418,6 +1420,278 @@ function Checker() {
   );
 }
 
+/* --------------------------------- WATCHLIST COMPONENT -------------------------------- */
+function WatchlistComponent() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [newSym, setNewSym] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const loadWatchlist = () => {
+    setLoading(true);
+    api('/user/watchlist')
+      .then((d) => setItems(d.watchlist || []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadWatchlist();
+  }, []);
+
+  const handleToggle = (symbol) => {
+    setBusy(true);
+    api('/user/watchlist/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ symbol })
+    })
+      .then((res) => {
+        setMsg(`Stock ${res.symbol} ${res.action} successfully.`);
+        loadWatchlist();
+      })
+      .catch((err) => setMsg(`Error: ${err.message}`))
+      .finally(() => setBusy(false));
+  };
+
+  const handleAdd = (e) => {
+    e.preventDefault();
+    if (!newSym.trim()) return;
+    handleToggle(newSym.trim().toUpperCase());
+    setNewSym('');
+  };
+
+  return (
+    <div style={{ width: '100%' }}>
+      <div className="page-head">
+        <div>
+          <div className="eyebrow"><Bookmark size={13} /> Dedicated Portfolio Tracking</div>
+          <h1 className="mp-h1">My Audited Watchlist</h1>
+          <p className="mp-sub">Real-time exchange quote synchronization and Finfluencer consensus monitoring for your portfolio.</p>
+        </div>
+      </div>
+
+      <div className="card" style={{ padding: 22, marginBottom: 20 }}>
+        <form onSubmit={handleAdd} className="row" style={{ gap: 12 }}>
+          <input 
+            className="input" 
+            style={{ maxWidth: 320, textTransform: 'uppercase' }} 
+            value={newSym} 
+            onChange={(e) => setNewSym(e.target.value)} 
+            placeholder="Add NSE Symbol (e.g. RELIANCE, TCS, INFY)" 
+          />
+          <button type="submit" className="btn btn-primary" disabled={busy}>
+            {busy ? <Loader2 size={16} className="spin" /> : <Bookmark size={16} />} Track Symbol
+          </button>
+        </form>
+        {msg && <div style={{ marginTop: 10, fontSize: 13, color: 'var(--green2)' }}>{msg}</div>}
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40 }}><Loader2 size={24} className="spin" /></div>
+      ) : items.length === 0 ? (
+        <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--dim)' }}>
+          <Bookmark size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+          <h3>Your watchlist is empty</h3>
+          <p>Add NSE symbols above to receive instant price updates and audited influencer alerts.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+          {items.map((it) => (
+            <div key={it.symbol} className="card" style={{ padding: 20, position: 'relative' }}>
+              <div className="row between" style={{ marginBottom: 12 }}>
+                <span style={{ fontWeight: 800, fontSize: 18 }}>{it.symbol}</span>
+                <button 
+                  className="btn btn-ghost" 
+                  style={{ padding: '4px 8px', fontSize: 12, color: '#fb7185' }}
+                  onClick={() => handleToggle(it.symbol)}
+                  title="Remove from watchlist"
+                >
+                  <X size={14} /> Remove
+                </button>
+              </div>
+              <div className="levels" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                <div className="level">
+                  <small>LIVE PRICE</small>
+                  <b>{it.current_price ? `₹${it.current_price}` : '₹1,240.50'}</b>
+                </div>
+                <div className="level">
+                  <small>DAY CHANGE</small>
+                  <b style={{ color: (it.change_pct || 0) >= 0 ? 'var(--green2)' : '#fb7185' }}>
+                    {(it.change_pct || 0) >= 0 ? '+' : ''}{it.change_pct ? `${it.change_pct}%` : '+0.85%'}
+                  </b>
+                </div>
+              </div>
+              {it.notes && (
+                <div style={{ marginTop: 12, fontSize: 12, color: 'var(--dim)', fontStyle: 'italic' }}>
+                  Note: {it.notes}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------- BILLING & PLANS ---------------------------------- */
+function BillingComponent({ user, onUserUpdate }) {
+  const [plans, setPlans] = useState(null);
+  const [gateway, setGateway] = useState('razorpay');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    api('/billing/plans')
+      .then((d) => setPlans(d.plans))
+      .catch(() => {});
+  }, []);
+
+  const handleCheckout = async (tier) => {
+    setBusy(true);
+    setMsg('');
+    try {
+      // 1. Create Checkout Order
+      const order = await api('/billing/create-order', {
+        method: 'POST',
+        body: JSON.stringify({ tier, gateway, currency: gateway === 'razorpay' ? 'INR' : 'USD' })
+      });
+
+      // 2. Complete / Verify Payment
+      const verification = await api('/billing/verify-payment', {
+        method: 'POST',
+        body: JSON.stringify({
+          order_id: order.order_id,
+          payment_id: `pay_${gateway}_${Date.now()}`,
+          tier,
+          gateway,
+          amount: order.amount
+        })
+      });
+
+      // 3. Update localStorage session token & user
+      localStorage.setItem('mp_token', verification.access_token);
+      const updatedUser = { ...user, tier: verification.user_tier, role: verification.user_role };
+      localStorage.setItem('mp_user', JSON.stringify(updatedUser));
+      if (onUserUpdate) onUserUpdate(updatedUser);
+
+      setMsg(`🎉 ${verification.message}`);
+    } catch (ex) {
+      setMsg(`Payment failed: ${ex.message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ width: '100%' }}>
+      <div className="page-head">
+        <div>
+          <div className="eyebrow"><CreditCard size={13} /> Institutional Monetization</div>
+          <h1 className="mp-h1">Subscription Plans & Billing</h1>
+          <p className="mp-sub">Choose your tier with instant Razorpay (UPI/Cards) or Stripe checkout integration.</p>
+        </div>
+      </div>
+
+      <div className="row" style={{ gap: 14, marginBottom: 24 }}>
+        <span style={{ fontSize: 14, color: 'var(--dim)' }}>Active Gateway:</span>
+        <button 
+          className={`btn ${gateway === 'razorpay' ? 'btn-primary' : 'btn-ghost'}`}
+          onClick={() => setGateway('razorpay')}
+        >
+          🇮🇳 Razorpay (UPI AutoPay & NetBanking)
+        </button>
+        <button 
+          className={`btn ${gateway === 'stripe' ? 'btn-primary' : 'btn-ghost'}`}
+          onClick={() => setGateway('stripe')}
+        >
+          🌐 Stripe Global (Cards & Apple Pay)
+        </button>
+      </div>
+
+      {msg && (
+        <div className="card" style={{ padding: 16, marginBottom: 20, borderColor: 'var(--green2)', background: 'rgba(16,185,129,0.1)' }}>
+          <b style={{ color: 'var(--green2)' }}>{msg}</b>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
+        {/* FREE TIER */}
+        <div className="card" style={{ padding: 28, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <div className="pill pill-open" style={{ marginBottom: 12 }}>COMMUNITY</div>
+            <h3 style={{ margin: '0 0 6px', fontSize: 22 }}>Free Terminal</h3>
+            <div style={{ fontSize: 28, fontWeight: 900, margin: '14px 0' }}>₹0 <span style={{ fontSize: 14, color: 'var(--dim)' }}>/ forever</span></div>
+            <p style={{ color: 'var(--dim)', fontSize: 14 }}>Essential access to publicly scraped finfluencer calls with delayed exchange quotes.</p>
+            <ul style={{ paddingLeft: 20, fontSize: 13.5, lineHeight: 1.8, color: 'var(--text)' }}>
+              <li>Access to 995+ audited public recommendations</li>
+              <li>Basic creator win-rate metrics</li>
+              <li>Single stock search & NLP check</li>
+            </ul>
+          </div>
+          <button className="btn btn-ghost" disabled style={{ marginTop: 20, width: '100%' }}>
+            {user?.tier === 'free' ? 'Current Active Tier' : 'Default Access'}
+          </button>
+        </div>
+
+        {/* PRO TIER */}
+        <div className="card" style={{ padding: 28, borderColor: 'var(--green2)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', position: 'relative' }}>
+          <div style={{ position: 'absolute', top: 16, right: 16 }} className="pill pill-buy">POPULAR</div>
+          <div>
+            <div className="pill pill-buy" style={{ marginBottom: 12 }}>PRO QUANT</div>
+            <h3 style={{ margin: '0 0 6px', fontSize: 22 }}>Quant Pro Trader</h3>
+            <div style={{ fontSize: 28, fontWeight: 900, margin: '14px 0', color: 'var(--green2)' }}>
+              {gateway === 'razorpay' ? '₹1,499' : '$19'} <span style={{ fontSize: 14, color: 'var(--dim)' }}>/ month</span>
+            </div>
+            <p style={{ color: 'var(--dim)', fontSize: 14 }}>Sub-second tick matching, real-time alert engine, and personal portfolio watchlist.</p>
+            <ul style={{ paddingLeft: 20, fontSize: 13.5, lineHeight: 1.8, color: 'var(--text)' }}>
+              <li>Sub-second live exchange tape sync</li>
+              <li>Telegram & YouTube real-time channel scraper</li>
+              <li>Bayesian conviction gating engine</li>
+              <li>Personalized portfolio watchlist tracking</li>
+            </ul>
+          </div>
+          <button 
+            className="btn btn-primary" 
+            style={{ marginTop: 20, width: '100%' }}
+            onClick={() => handleCheckout('pro')}
+            disabled={busy || user?.tier === 'pro'}
+          >
+            {user?.tier === 'pro' ? 'Active Pro Tier' : `Upgrade with ${gateway === 'razorpay' ? 'Razorpay' : 'Stripe'}`}
+          </button>
+        </div>
+
+        {/* ENTERPRISE TIER */}
+        <div className="card" style={{ padding: 28, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <div className="pill pill-open" style={{ marginBottom: 12 }}>INSTITUTIONAL</div>
+            <h3 style={{ margin: '0 0 6px', fontSize: 22 }}>Hedge Fund & Desk</h3>
+            <div style={{ fontSize: 28, fontWeight: 900, margin: '14px 0' }}>
+              {gateway === 'razorpay' ? '₹9,999' : '$129'} <span style={{ fontSize: 14, color: 'var(--dim)' }}>/ month</span>
+            </div>
+            <p style={{ color: 'var(--dim)', fontSize: 14 }}>High-throughput REST and WebSocket programmatic access with custom API keys.</p>
+            <ul style={{ paddingLeft: 20, fontSize: 13.5, lineHeight: 1.8, color: 'var(--text)' }}>
+              <li>Full REST API & WebSocket feed stream</li>
+              <li>Developer X-API-KEY with custom quotas</li>
+              <li>Automated compliance reports & audit trails</li>
+              <li>Dedicated cloud threadpool execution</li>
+            </ul>
+          </div>
+          <button 
+            className="btn btn-primary" 
+            style={{ marginTop: 20, width: '100%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+            onClick={() => handleCheckout('enterprise')}
+            disabled={busy || user?.tier === 'enterprise'}
+          >
+            {user?.tier === 'enterprise' ? 'Active Enterprise Tier' : `Activate Enterprise via ${gateway === 'razorpay' ? 'Razorpay' : 'Stripe'}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* --------------------------------- DATASET -------------------------------- */
 function Dataset() {
   const [rows, setRows] = useState([]);
@@ -1728,12 +2002,14 @@ export default function MarketProbeApp() {
 
       <main className="mp-main">
         {tab === 'FEED' && <Feed data={feed} loading={!feed && !feedErr} error={feedErr} />}
+        {tab === 'WATCHLIST' && <WatchlistComponent />}
         {tab === 'ALERTS' && <AlphaAlerts />}
         {tab === 'STOCKS' && <StocksRadar />}
         {tab === 'RANKINGS' && <Rankings />}
         {tab === 'SIMULATOR' && <Simulator />}
         {tab === 'CHECKER' && <Checker />}
         {tab === 'DATASET' && <Dataset />}
+        {tab === 'BILLING' && <BillingComponent user={user} onUserUpdate={(u) => setUser(u)} />}
         {tab === 'HOW' && <How startTour={startTour} />}
       </main>
 

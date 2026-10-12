@@ -58,6 +58,42 @@ def init_user_db():
             ''', ("usr_pro_002", "trader@hedgefund.in", "Quantitative Alpha Trader",
                   "pbkdf2$sha256$20000$c2FsdF90cmFkZXI=$yDqQ/8G2Q4x9J3q5H0x1F2w8z7Y6U5V4T3S2R1Q0P9O=",
                   "pro_trader", "pro", "email", "mp_live_pro_5519284729103948"))
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS user_watchlists (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                notes TEXT,
+                alert_above REAL,
+                alert_below REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, symbol)
+            )
+        ''')
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS saved_calls (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                call_id TEXT NOT NULL,
+                saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, call_id)
+            )
+        ''')
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                gateway TEXT NOT NULL,
+                tier TEXT NOT NULL,
+                status TEXT DEFAULT 'active',
+                order_id TEXT,
+                payment_id TEXT,
+                amount REAL,
+                currency TEXT DEFAULT 'INR',
+                valid_until TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         conn.commit()
         conn.close()
     except Exception as e:
@@ -100,6 +136,93 @@ def save_user(user: Dict[str, Any]) -> None:
         conn.close()
     except Exception as e:
         print(f"[SECURITY] Error saving user: {e}")
+
+# Watchlist & Saved Calls Helpers
+def get_user_watchlist(user_id: str) -> list:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT symbol, notes, alert_above, alert_below, created_at FROM user_watchlists WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
+        rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"[SECURITY] Error fetching watchlist: {e}")
+        return []
+
+def toggle_watchlist_item(user_id: str, symbol: str, notes: str = "") -> dict:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM user_watchlists WHERE user_id = ? AND symbol = ?", (user_id, symbol.upper()))
+        existing = cur.fetchone()
+        if existing:
+            cur.execute("DELETE FROM user_watchlists WHERE user_id = ? AND symbol = ?", (user_id, symbol.upper()))
+            conn.commit()
+            conn.close()
+            return {"symbol": symbol.upper(), "action": "removed"}
+        else:
+            cur.execute("INSERT INTO user_watchlists (user_id, symbol, notes) VALUES (?, ?, ?)", (user_id, symbol.upper(), notes))
+            conn.commit()
+            conn.close()
+            return {"symbol": symbol.upper(), "action": "added"}
+    except Exception as e:
+        print(f"[SECURITY] Error toggling watchlist: {e}")
+        return {"symbol": symbol.upper(), "error": str(e)}
+
+def get_user_saved_calls(user_id: str) -> list:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT call_id, saved_at FROM saved_calls WHERE user_id = ? ORDER BY saved_at DESC", (user_id,))
+        rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"[SECURITY] Error fetching saved calls: {e}")
+        return []
+
+def toggle_saved_call(user_id: str, call_id: str) -> dict:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM saved_calls WHERE user_id = ? AND call_id = ?", (user_id, str(call_id)))
+        existing = cur.fetchone()
+        if existing:
+            cur.execute("DELETE FROM saved_calls WHERE user_id = ? AND call_id = ?", (user_id, str(call_id)))
+            conn.commit()
+            conn.close()
+            return {"call_id": str(call_id), "action": "unsaved"}
+        else:
+            cur.execute("INSERT INTO saved_calls (user_id, call_id) VALUES (?, ?)", (user_id, str(call_id)))
+            conn.commit()
+            conn.close()
+            return {"call_id": str(call_id), "action": "saved"}
+    except Exception as e:
+        print(f"[SECURITY] Error toggling saved call: {e}")
+        return {"call_id": str(call_id), "error": str(e)}
+
+def record_subscription(user_id: str, gateway: str, tier: str, amount: float, order_id: str, payment_id: str, currency: str = "INR") -> dict:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        sub_id = f"sub_{int(time.time())}_{abs(hash(order_id)) % 10000}"
+        cur.execute('''
+            INSERT INTO subscriptions (id, user_id, gateway, tier, status, order_id, payment_id, amount, currency)
+            VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)
+        ''', (sub_id, user_id, gateway, tier, order_id, payment_id, amount, currency))
+        # Update user's tier and role in users table
+        new_role = "institutional_admin" if tier == "enterprise" else "pro_trader"
+        cur.execute("UPDATE users SET tier = ?, role = ? WHERE id = ?", (tier, new_role, user_id))
+        conn.commit()
+        conn.close()
+        return {"status": "success", "subscription_id": sub_id, "tier": tier, "role": new_role}
+    except Exception as e:
+        print(f"[SECURITY] Error recording subscription: {e}")
+        return {"status": "error", "message": str(e)}
+
 
 # In-memory mock user dictionary fallback
 USER_DB: Dict[str, Dict[str, Any]] = {
