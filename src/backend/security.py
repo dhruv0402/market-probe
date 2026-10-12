@@ -12,6 +12,7 @@ import hashlib
 import base64
 import json
 import time
+import sqlite3
 from typing import Optional, Dict, Any
 from fastapi import HTTPException, Security, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -22,7 +23,85 @@ ACCESS_TOKEN_EXPIRE_SECONDS = 86400 * 7 # 7 days
 
 security_bearer = HTTPBearer(auto_error=False)
 
-# In-memory mock user database for turnkey zero-dependency SaaS auth
+# SQLite User Persistence Setup
+DB_PATH = os.environ.get("MARKETPROBE_DB_PATH", os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "marketprobe.db"))
+
+def init_user_db():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                name TEXT,
+                password_hash TEXT,
+                role TEXT DEFAULT 'pro_trader',
+                tier TEXT DEFAULT 'pro',
+                provider TEXT DEFAULT 'email',
+                api_key TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        # Seed default admin & quant accounts if empty
+        cur.execute("SELECT COUNT(*) FROM users")
+        if cur.fetchone()[0] == 0:
+            cur.execute('''
+                INSERT INTO users (id, email, name, password_hash, role, tier, provider, api_key)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', ("usr_admin_001", "admin@marketprobe.finance", "MarketProbe Admin",
+                  "pbkdf2$sha256$20000$c2FsdF9hZG1pbg==$yDqQ/8G2Q4x9J3q5H0x1F2w8z7Y6U5V4T3S2R1Q0P9O=",
+                  "institutional_admin", "enterprise", "email", "mp_live_adm_9948271049283749"))
+            cur.execute('''
+                INSERT INTO users (id, email, name, password_hash, role, tier, provider, api_key)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', ("usr_pro_002", "trader@hedgefund.in", "Quantitative Alpha Trader",
+                  "pbkdf2$sha256$20000$c2FsdF90cmFkZXI=$yDqQ/8G2Q4x9J3q5H0x1F2w8z7Y6U5V4T3S2R1Q0P9O=",
+                  "pro_trader", "pro", "email", "mp_live_pro_5519284729103948"))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[SECURITY] Warning initializing user table: {e}")
+
+init_user_db()
+
+def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE email = ?", (email.lower(),))
+        row = cur.fetchone()
+        conn.close()
+        if row:
+            return dict(row)
+    except Exception:
+        pass
+    return None
+
+def save_user(user: Dict[str, Any]) -> None:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute('''
+            INSERT OR REPLACE INTO users (id, email, name, password_hash, role, tier, provider, api_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            user["id"],
+            user["email"].lower(),
+            user.get("name", user["email"].split("@")[0].capitalize()),
+            user.get("password_hash", ""),
+            user.get("role", "pro_trader"),
+            user.get("tier", "pro"),
+            user.get("provider", "email"),
+            user.get("api_key", f"mp_live_{abs(hash(user['email']))}")
+        ))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[SECURITY] Error saving user: {e}")
+
+# In-memory mock user dictionary fallback
 USER_DB: Dict[str, Dict[str, Any]] = {
     "admin@marketprobe.finance": {
         "id": "usr_admin_001",
