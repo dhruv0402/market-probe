@@ -728,39 +728,88 @@ function TipCard({ t, first }) {
     setShowChart(!showChart);
   };
 
+  const [copiedKite, setCopiedKite] = useState(false);
+  const [showOrderModal, setShowOrderModal] = useState(false);
+
+  const copyKitePayload = (e) => {
+    e?.stopPropagation();
+    const payload = `${t.action} ${t.ticker} | Qty: ${suggestedQty} | Price: ₹${t.entry_price} | SL: ₹${t.stoploss_price} | Target: ₹${t.target_price}`;
+    navigator.clipboard?.writeText(payload);
+    setCopiedKite(true);
+    setTimeout(() => setCopiedKite(false), 2000);
+  };
+
+  const tvSymbol = t.ticker.startsWith('^') ? 'NSE:NIFTY' : `NSE:${t.ticker}`;
+
   return (
     <div className="card tip">
       {isYT ? (
-        <div className="tip-media" data-tour={first ? 'tip-video' : undefined} onClick={() => setPlaying(true)}>
+        <div className="tip-media" data-tour={first ? 'tip-video' : undefined}>
           {playing ? (
-            <iframe 
-              src={`https://www.youtube.com/embed/${t.video_id}?start=${t.timestamp_seconds || 0}&autoplay=1`} 
-              title={t.video_title} 
-              allow="autoplay; encrypted-media; picture-in-picture" 
-              allowFullScreen 
-            />
+            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+              <button
+                type="button"
+                className="tip-close-media"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPlaying(false);
+                }}
+                title="Close video preview"
+              >
+                <X size={15} />
+              </button>
+              <iframe 
+                src={`https://www.youtube.com/embed/${t.video_id}?start=${t.timestamp_seconds || 0}&autoplay=1`} 
+                title={t.video_title} 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                allowFullScreen 
+              />
+            </div>
           ) : (
-            <>
-              <img src={t.thumbnail_url || `https://img.youtube.com/vi/${t.video_id}/hqdefault.jpg`} alt={t.video_title} loading="lazy" />
-              <div className="tip-yt"><Play size={10} fill="red" color="red" /> YOUTUBE RECORD</div>
-              <div className="tip-play"><span><Play size={26} fill="#fff" color="#fff" /></span></div>
+            <div onClick={() => setPlaying(true)} style={{ position: 'relative', width: '100%', height: '100%' }}>
+              <img 
+                src={t.thumbnail_url || `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg`} 
+                alt={t.video_title} 
+                loading="lazy" 
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = `https://img.youtube.com/vi/${t.video_id}/0.jpg`;
+                }}
+              />
+              <div className="tip-yt">
+                <Play size={10} fill="#ef4444" color="#ef4444" />
+                <span>YOUTUBE AUDIT RECORD</span>
+              </div>
+              <div className="tip-play">
+                <span><Play size={24} fill="#fff" color="#fff" style={{ marginLeft: 2 }} /></span>
+              </div>
               <div className="tip-overlay">
                 <span className="tip-title">{t.video_title || `${t.action} ${t.ticker} Analysis`}</span>
-                <span className="tip-ts">▶ @ {t.timestamp_str}</span>
+                <span className="tip-ts">
+                  <Clock size={11} /> @ {t.timestamp_str || '00:00'}
+                </span>
               </div>
-            </>
+            </div>
           )}
         </div>
       ) : (
         <div className="tip-nomedia" data-tour={first ? 'tip-video' : undefined}>
-          <div className="big" style={{ color: t.action === 'BUY' ? 'var(--green2)' : '#fb7185' }}>{t.action} {t.ticker}</div>
-          <div className="src">
+          <div className="row between">
             <span className="pill pill-sebi">{t.platform}</span>
-            <span>{t.broker_desk || t.telegram_channel || 'Direct Broadcast'}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--dim)', fontFamily: 'var(--mono)' }}>
+              {t.timestamp ? String(t.timestamp).slice(0, 10) : 'VERIFIED'}
+            </span>
+          </div>
+          <div className="big" style={{ color: t.action === 'BUY' ? 'var(--green2)' : '#fb7185' }}>
+            {t.action} {t.ticker}
+          </div>
+          <div className="src">
+            <Activity size={14} color="var(--dim)" />
+            <span>{t.broker_desk || t.telegram_channel || 'Multi-platform Social Intake'}</span>
           </div>
           {t.source_url && t.source_url !== '#' && (
             <div style={{ marginTop: 4 }}>
-              <a href={t.source_url} target="_blank" rel="noreferrer" style={{ fontSize: '12px' }}>
+              <a href={t.source_url} target="_blank" rel="noreferrer" style={{ fontSize: '12px', color: 'var(--blue)' }}>
                 Inspect source bulletin <ExternalLink size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
               </a>
             </div>
@@ -949,23 +998,147 @@ function TipCard({ t, first }) {
           </div>
         )}
 
-        {/* 1-Click Zerodha Kite Order with Calculated Quantity */}
+        {/* Order Execution Bar: Direct TradingView Chart Link + Kite Order Ticket Modal */}
         <div className="row between" style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
-          <span style={{ fontSize: 11.5, color: 'var(--dim)' }}>
-            Calculated Sizing: <b>{suggestedQty} Qty ({inr(totalCost)})</b>
-          </span>
-          <a
-            href={`https://kite.zerodha.com/connect/basket?tradingsymbol=${t.ticker}&exchange=NSE&transaction_type=${t.action}&order_type=LIMIT&price=${t.entry_price}&quantity=${suggestedQty}`}
-            target="_blank"
-            rel="noreferrer"
-            className="btn btn-primary"
-            style={{ padding: '6px 14px', fontSize: 12.5, gap: 6, textDecoration: 'none' }}
-            title="Pre-fills limit order directly on Zerodha Kite Connect with optimal sizing"
-          >
-            <span>⚡ Trade {suggestedQty} Qty on Kite</span>
-            <ExternalLink size={12} />
-          </a>
+          <div className="row" style={{ gap: 6 }}>
+            <a
+              href={`https://www.tradingview.com/chart/?symbol=${tvSymbol}`}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-ghost"
+              style={{ padding: '6px 12px', fontSize: 12, gap: 5, textDecoration: 'none' }}
+              title="Open full TradingView NSE technical chart"
+            >
+              <ExternalLink size={12} />
+              <span>TV Chart</span>
+            </a>
+            {isYT && (
+              <a
+                href={`https://www.youtube.com/watch?v=${t.video_id}${t.timestamp_seconds ? `&t=${t.timestamp_seconds}` : ''}`}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-ghost"
+                style={{ padding: '6px 10px', fontSize: 12, gap: 4, textDecoration: 'none', color: '#ef4444' }}
+                title="Open original YouTube video timestamp"
+              >
+                <Play size={11} fill="#ef4444" />
+                <span>YouTube</span>
+              </a>
+            )}
+          </div>
+
+          <div className="row" style={{ gap: 8 }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={copyKitePayload}
+              style={{ padding: '6px 12px', fontSize: 12, gap: 5 }}
+              title="Copy order details formatted for Zerodha Kite"
+            >
+              <Copy size={12} />
+              <span>{copiedKite ? '✓ Copied' : 'Copy Order'}</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setShowOrderModal(true)}
+              style={{ padding: '6px 14px', fontSize: 12.5, gap: 6 }}
+              title="Open execution order ticket for Zerodha Kite"
+            >
+              <span>⚡ Trade {suggestedQty} Qty on Kite</span>
+            </button>
+          </div>
         </div>
+
+        {/* Kite Order Ticket Modal */}
+        {showOrderModal && (
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.78)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            zIndex: 9999,
+            display: 'grid',
+            placeItems: 'center',
+            padding: 16
+          }} onClick={() => setShowOrderModal(false)}>
+            <div style={{
+              background: '#0d131f',
+              border: '1px solid var(--line2)',
+              borderRadius: 14,
+              padding: 24,
+              maxWidth: 440,
+              width: '100%',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.85)'
+            }} onClick={(e) => e.stopPropagation()}>
+              <div className="row between" style={{ marginBottom: 16, borderBottom: '1px solid var(--line)', paddingBottom: 12 }}>
+                <div className="row" style={{ gap: 8 }}>
+                  <span className={`pill ${t.action === 'BUY' ? 'pill-buy' : 'pill-sell'}`} style={{ fontSize: 13 }}>
+                    {t.action} {t.ticker}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Zerodha Kite Order Ticket</span>
+                </div>
+                <button type="button" className="btn-ghost" style={{ padding: 4 }} onClick={() => setShowOrderModal(false)}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, border: '1px solid var(--line)', marginBottom: 16 }}>
+                <div className="row between" style={{ marginBottom: 8, fontSize: 12.5 }}>
+                  <span style={{ color: 'var(--dim)' }}>Instrument:</span>
+                  <b style={{ color: 'var(--text)', fontFamily: 'var(--mono)' }}>NSE:{t.ticker}</b>
+                </div>
+                <div className="row between" style={{ marginBottom: 8, fontSize: 12.5 }}>
+                  <span style={{ color: 'var(--dim)' }}>Calculated Sizing:</span>
+                  <b style={{ color: 'var(--blue)' }}>{suggestedQty} Shares ({inr(totalCost)})</b>
+                </div>
+                <div className="row between" style={{ marginBottom: 8, fontSize: 12.5 }}>
+                  <span style={{ color: 'var(--dim)' }}>Limit Entry Price:</span>
+                  <b style={{ color: 'var(--text)' }}>{inr(t.entry_price)}</b>
+                </div>
+                <div className="row between" style={{ marginBottom: 8, fontSize: 12.5 }}>
+                  <span style={{ color: 'var(--dim)' }}>Target Price:</span>
+                  <b style={{ color: 'var(--green2)' }}>{inr(t.target_price)} (+{t.upside_pct || 8}%)</b>
+                </div>
+                <div className="row between" style={{ fontSize: 12.5 }}>
+                  <span style={{ color: 'var(--dim)' }}>Stop Loss:</span>
+                  <b style={{ color: '#fb7185' }}>{inr(t.stoploss_price)} (-{Math.abs(t.risk_pct || 4)}%)</b>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <a
+                  href={`https://kite.zerodha.com/chart/ext/ciq/NSE/${t.ticker}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-primary"
+                  style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', fontSize: 13.5, gap: 8, textDecoration: 'none' }}
+                  onClick={copyKitePayload}
+                >
+                  <ExternalLink size={14} /> Launch Zerodha Kite & Copy Order
+                </a>
+                <a
+                  href={`https://www.tradingview.com/chart/?symbol=${tvSymbol}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-ghost"
+                  style={{ width: '100%', justifyContent: 'center', padding: '8px 16px', fontSize: 12.5, gap: 6, textDecoration: 'none' }}
+                >
+                  <ExternalLink size={13} /> View TradingView Pro Chart
+                </a>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={copyKitePayload}
+                  style={{ width: '100%', justifyContent: 'center', padding: '8px 16px', fontSize: 12.5, gap: 6 }}
+                >
+                  <Copy size={13} /> {copiedKite ? '✓ Order Details Copied to Clipboard!' : 'Copy Order Parameters Text'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1037,13 +1210,18 @@ function Feed({ data, loading, error, onSelectStock }) {
                         {a.distance_from_entry_pct >= 0 ? `+${a.distance_from_entry_pct}%` : `${a.distance_from_entry_pct}%`} vs Entry
                       </span>
                       <a 
-                        href={`https://kite.zerodha.com/connect/basket?tradingsymbol=${a.ticker}&exchange=NSE&transaction_type=${a.action}&order_type=LIMIT&price=${a.current_price}`}
+                        href={`https://kite.zerodha.com/chart/ext/ciq/NSE/${a.ticker}`}
                         target="_blank"
                         rel="noreferrer"
                         className="btn btn-primary"
                         style={{ padding: '3px 8px', fontSize: 10.5 }}
+                        title="Open on Zerodha Kite"
+                        onClick={() => {
+                          const payload = `${a.action} ${a.ticker} | CMP: ₹${a.current_price} | Entry: ₹${a.entry_price} | Target: ₹${a.target_price} | SL: ₹${a.stoploss_price}`;
+                          navigator.clipboard?.writeText(payload);
+                        }}
                       >
-                        Trade
+                        Trade on Kite
                       </a>
                     </div>
                   </div>
@@ -1938,12 +2116,16 @@ function WatchlistComponent() {
                     <ShieldCheck size={12} color="var(--green2)" /> Verified Tick Replay
                   </span>
                   <a
-                    href={`https://kite.zerodha.com/connect/basket?tradingsymbol=${it.symbol}&exchange=NSE&transaction_type=BUY&order_type=LIMIT&price=${it.current_price || ''}`}
+                    href={`https://kite.zerodha.com/chart/ext/ciq/NSE/${it.symbol}`}
                     target="_blank"
                     rel="noreferrer"
                     className="btn btn-primary"
                     style={{ padding: '4px 10px', fontSize: 11.5, gap: 5, textDecoration: 'none' }}
-                    title="Pre-fills order on Zerodha Kite"
+                    title="Open on Zerodha Kite"
+                    onClick={() => {
+                      const payload = `BUY ${it.symbol} | CMP: ₹${it.current_price || ''} | Target: ₹${it.avg_target || ''}`;
+                      navigator.clipboard?.writeText(payload);
+                    }}
                   >
                     <span>⚡ Trade on Kite</span>
                     <ExternalLink size={11} />
