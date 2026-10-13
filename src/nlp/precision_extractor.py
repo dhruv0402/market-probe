@@ -177,31 +177,58 @@ class PrecisionFinancialNER:
 
         matched_ticker = None
         matched_company = None
-        text_upper = text_clean.upper()
 
-        # 1. Match sorted aliases by length descending
-        for alias, (sym, name) in self.sorted_aliases:
-            if re.search(r'\b' + re.escape(alias) + r'\b', text_upper):
-                matched_ticker = sym
-                matched_company = name
-                break
+        # 0. Check explicit .NS symbol in text (highest precision)
+        ns_match = re.search(r'\b([A-Z0-9&-]+)\.NS\b', text_clean, re.IGNORECASE)
+        if ns_match:
+            cand = ns_match.group(1).upper()
+            if cand in self.valid_symbols and cand in self.equity_by_symbol:
+                matched_ticker, matched_company = self.equity_by_symbol[cand]
 
-        # 2. Token symbol match
+        # Clean author/broker attribution brackets like [HDFC Securities...] and hashtags like #NIFTY #StockMarket
+        cleaned_text = re.sub(r'\[[^\]]*\]', ' ', text_clean)
+        cleaned_no_hash = re.sub(r'#\w+', ' ', cleaned_text)
+        text_upper = cleaned_no_hash.upper()
+
+        # 1. Exact valid NSE symbol match on tokens
         if not matched_ticker:
-            tokens = re.findall(r'\b[A-Za-z0-9-]{2,15}\b', text_clean)
+            tokens = re.findall(r'\b[A-Za-z0-9-]{2,15}\b', cleaned_no_hash)
             for tok in tokens:
                 tok_u = tok.upper()
                 if tok_u in self.valid_symbols and tok_u not in FALSE_POSITIVE_WORDS:
                     matched_ticker, matched_company = self.equity_by_symbol[tok_u]
                     break
 
-        # 3. Fuzzy company search
+        # 2. Match sorted aliases by length descending
+        if not matched_ticker:
+            for alias, (sym, name) in self.sorted_aliases:
+                if re.search(r'\b' + re.escape(alias) + r'\b', text_upper):
+                    matched_ticker = sym
+                    matched_company = name
+                    break
+
+        # 3. Exact company search
         if not matched_ticker:
             for comp_name in self.company_names:
                 if re.search(r'\b' + re.escape(comp_name) + r'\b', text_upper):
                     if comp_name not in FALSE_POSITIVE_WORDS:
                         matched_ticker, matched_company = self.equity_by_company[comp_name]
                         break
+
+        # 4. Fuzzy matching fallback using rapidfuzz
+        if not matched_ticker:
+            try:
+                from rapidfuzz import process, fuzz
+                tokens = [t.upper() for t in re.findall(r'\b[A-Za-z0-9-]{3,15}\b', cleaned_no_hash) if t.upper() not in FALSE_POSITIVE_WORDS]
+                for tok in tokens:
+                    best_match = process.extractOne(tok, self.valid_symbols, scorer=fuzz.ratio, score_cutoff=88)
+                    if best_match:
+                        sym = best_match[0]
+                        if sym in self.equity_by_symbol:
+                            matched_ticker, matched_company = self.equity_by_symbol[sym]
+                            break
+            except Exception:
+                pass
 
         is_hype_tip = bool(re.search(r'\b(100x|50x|multibagger|guarantee|rocket|secret|penny stock|jackpot)\b', text_clean, re.IGNORECASE))
         if not matched_ticker:
