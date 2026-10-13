@@ -85,11 +85,16 @@ if os.path.exists(MODEL_PATH):
             model_metadata = data
             print("✅ Production XGBoost Conviction Engine loaded successfully.")
     except Exception as e:
-        print("Model loading notice:", e)
-
 def get_db():
-    conn = sqlite3.connect(DB_PATH, timeout=10.0)
+    conn = sqlite3.connect(DB_PATH, timeout=20.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA journal_mode = WAL;")
+        conn.execute("PRAGMA synchronous = NORMAL;")
+        conn.execute("PRAGMA cache_size = -64000;") # 64MB memory cache
+        conn.execute("PRAGMA temp_store = MEMORY;")
+    except Exception:
+        pass
     return conn
 
 # -------------------------------------------------------------
@@ -897,6 +902,11 @@ def get_live_quotes(force_refresh: bool = False):
 
 @app.get("/api/home-feed")
 def get_home_feed(min_conviction: float = Query(0.0, description="Filter by minimum AI Conviction % (e.g. 60.0 for 75% win-rate gating)")):
+    cache_key = f"home_feed_{min_conviction}"
+    cached_val = global_cache.get(cache_key)
+    if cached_val:
+        return cached_val
+
     conn = get_db()
     cur = conn.cursor()
     
@@ -1048,7 +1058,7 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
         })
 
     conn.close()
-    return {
+    result = {
         "stats": {
             "total_tips_tracked": total_calls,
             "verified_profitable": hits,
@@ -1064,6 +1074,8 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
         "trending_stocks": trending_stocks,
         "recent_tips": recent_tips
     }
+    global_cache.set(cache_key, result, ttl_seconds=5)
+    return result
 
 @app.get("/api/stocks")
 def get_all_stocks_radar(tier: Optional[str] = None):

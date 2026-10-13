@@ -12,7 +12,11 @@ import Tour from './Tour.jsx';
 import './mp.css';
 
 const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || '8081';
-const API = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:${BACKEND_PORT}/api`;
+const API = import.meta.env.VITE_API_URL || (
+  typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+    ? `${window.location.origin}/api`
+    : `http://${typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1'}:${BACKEND_PORT}/api`
+);
 
 async function api(path, opts = {}) {
   const token = localStorage.getItem('mp_token');
