@@ -85,6 +85,8 @@ if os.path.exists(MODEL_PATH):
             model_metadata = data
             print("✅ Production XGBoost Conviction Engine loaded successfully.")
     except Exception as e:
+        print("Model loading notice:", e)
+
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=20.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
