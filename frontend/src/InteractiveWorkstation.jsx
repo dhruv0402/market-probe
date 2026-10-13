@@ -29,7 +29,11 @@ import {
 } from 'recharts';
 
 const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || '8080';
-const API_BASE = import.meta.env.VITE_API_URL || `http://${typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1'}:${BACKEND_PORT}/api`;
+const API_BASE = import.meta.env.VITE_API_URL || (
+  typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+    ? `${window.location.origin}/api`
+    : `http://${typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1'}:${BACKEND_PORT}/api`
+);
 
 const ASSETS = [
   { ticker: '^NSEI', name: 'NIFTY 50', class: 'Indian Benchmark Index', currency: '₹', icon: '🇮🇳', isStock: false },
