@@ -1019,9 +1019,9 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
         if min_conviction > 0 and ai_conviction < min_conviction:
             continue
         
-        # Zerodha Kite basket execution deep link
+        # Zerodha Kite execution deep link
         kite_action = "BUY" if (r["action"] or "").upper() == "BUY" else "SELL"
-        kite_url = f"https://kite.zerodha.com/connect/basket?tradingsymbol={t_clean}&exchange=NSE&transaction_type={kite_action}&order_type=LIMIT&price={round(entry, 2)}"
+        kite_url = f"https://kite.zerodha.com/chart/ext/ciq/NSE/{t_clean}"
         
         is_sebi = bool(r["is_sebi_registered"])
         sebi_risk = "LOW_RISK" if is_sebi else "UNREGISTERED_CAUTION"
