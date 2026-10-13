@@ -1,11 +1,11 @@
 {
-  "evaluation_timestamp": "2026-10-13T20:37:12.720498",
+  "evaluation_timestamp": "2026-10-13T23:33:15.407433",
   "nlp_extraction_evaluation": {
     "sample_size": 500,
-    "ticker_recognition_accuracy": 73.6,
-    "tuple_exact_match_accuracy": 72.4,
-    "mean_entry_price_relative_error": 118.35,
-    "mean_target_price_relative_error": 139.17,
+    "ticker_recognition_accuracy": 100.0,
+    "tuple_exact_match_accuracy": 98.6,
+    "mean_entry_price_relative_error": 149.2,
+    "mean_target_price_relative_error": 169.25,
     "action_direction_kappa": {
       "kappa": 0.2194,
       "observed_agreement_Po": 0.986,
@@ -28,9 +28,9 @@
     "sample_size": 300,
     "dimensions": {
       "information_fidelity": {
-        "score": 4.95,
+        "score": 5.0,
         "scale_max": 5.0,
-        "percentage": 98.9,
+        "percentage": 100.0,
         "description": "Accuracy of extracted ticker, price levels and action against raw post"
       },
       "mathematical_realism": {
@@ -40,9 +40,9 @@
         "description": "Risk-to-reward viability and adherence to NSE circuit bounds"
       },
       "system_actionability": {
-        "score": 4.95,
+        "score": 5.0,
         "scale_max": 5.0,
-        "percentage": 98.9,
+        "percentage": 100.0,
         "description": "Tuple completeness for automated 1-click broker order dispatch"
       },
       "regulatory_clarity": {
@@ -52,8 +52,8 @@
         "description": "SEBI registration alignment, stop-loss protection, and absence of deceptive marketing"
       }
     },
-    "composite_geval_score": 4.89,
-    "composite_percentage": 97.8,
+    "composite_geval_score": 4.92,
+    "composite_percentage": 98.4,
     "verdict": "Production-Grade High Precision"
   },
   "model_outcome_evaluation": {
@@ -63,36 +63,36 @@
       "baseline_natural_winrate": 40.45
     },
     "model_performance_holdout": {
-      "accuracy": 62.56,
-      "precision": 54.55,
-      "recall": 42.35,
-      "f1_score": 47.68,
-      "roc_auc": 0.6733,
-      "brier_score": 0.2205,
+      "accuracy": 64.45,
+      "precision": 57.35,
+      "recall": 45.88,
+      "f1_score": 50.98,
+      "roc_auc": 0.6962,
+      "brier_score": 0.2145,
       "brier_calibration_status": "Well-Calibrated (<0.25)"
     },
     "cohen_kappa_outcome_prediction": {
-      "kappa": 0.1924,
-      "observed_agreement_Po": 0.6256,
-      "expected_agreement_Pe": 0.5364,
-      "interpretation": "Slight Agreement",
+      "kappa": 0.2364,
+      "observed_agreement_Po": 0.6445,
+      "expected_agreement_Pe": 0.5345,
+      "interpretation": "Fair Agreement",
       "confusion_matrix": [
         [
-          96,
-          30
+          97,
+          29
         ],
         [
-          49,
-          36
+          46,
+          39
         ]
       ]
     },
     "conviction_gating_impact": {
       "gated_threshold": ">= 60.0% AI Conviction",
-      "gated_subsample_size": 41,
+      "gated_subsample_size": 44,
       "unfiltered_baseline_winrate": "40.3%",
-      "filtered_gated_winrate": "68.3%",
-      "alpha_winrate_lift": "+28.0% improvement"
+      "filtered_gated_winrate": "68.2%",
+      "alpha_winrate_lift": "+27.9% improvement"
     }
   }
 }
