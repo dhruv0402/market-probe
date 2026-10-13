@@ -1670,7 +1670,28 @@ def get_evaluation_metrics():
         }
     }
 
+# -------------------------------------------------------------------------
+# Static Frontend Serving for Single-Container Docker / Cloud Deployment
+# -------------------------------------------------------------------------
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+FRONTEND_DIST = os.path.join(BASE_DIR, "frontend", "dist")
+if os.path.exists(FRONTEND_DIST):
+    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
+
+    @app.get("/{full_path:path}")
+    def serve_spa(full_path: str):
+        file_path = os.path.join(FRONTEND_DIST, full_path)
+        if full_path and os.path.exists(file_path) and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        index_file = os.path.join(FRONTEND_DIST, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        return {"status": "MarketProbe API online", "frontend": "dist not found"}
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("src.backend.api:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run("src.backend.api:app", host="0.0.0.0", port=port, reload=True)
 
