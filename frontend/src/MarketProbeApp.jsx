@@ -693,10 +693,41 @@ function LandingPage({ onOpenAuth, onLaunchDemo, theme, setTheme, glow, setGlow 
 /* ---------------------------------- FEED ---------------------------------- */
 function TipCard({ t, first }) {
   const [playing, setPlaying] = useState(false);
+  const [showChart, setShowChart] = useState(false);
+  const [showCalc, setShowCalc] = useState(false);
+  const [candles, setCandles] = useState([]);
+  const [loadingCandles, setLoadingCandles] = useState(false);
+
+  // Position Sizing Calculator State
+  const [userCapital, setUserCapital] = useState(50000);
+  const [riskPerTrade, setRiskPerTrade] = useState(1500);
+
   const isYT = t.platform === 'YouTube' && t.video_id;
   const conv = t.ai_conviction_score ?? 50;
   const statusCls = t.status === 'HIT' ? 'pill-hit' : t.status === 'MISS' ? 'pill-miss' : 'pill-open';
-  
+
+  const entry = Number(t.entry_price) || 100;
+  const target = Number(t.target_price) || entry * 1.08;
+  const stoploss = Number(t.stoploss_price) || entry * 0.95;
+
+  const perShareRisk = Math.max(0.1, Math.abs(entry - stoploss));
+  const perShareReward = Math.max(0.1, Math.abs(target - entry));
+  const suggestedQty = Math.max(1, Math.floor(riskPerTrade / perShareRisk));
+  const totalCost = suggestedQty * entry;
+  const expectedProfit = suggestedQty * perShareReward;
+  const maxLoss = suggestedQty * perShareRisk;
+
+  const toggleChart = () => {
+    if (!showChart && candles.length === 0) {
+      setLoadingCandles(true);
+      api(`/stock-candles?symbol=${t.ticker}&period=1mo&interval=1d`)
+        .then((d) => setCandles(d.candles || []))
+        .catch(() => setCandles([]))
+        .finally(() => setLoadingCandles(false));
+    }
+    setShowChart(!showChart);
+  };
+
   return (
     <div className="card tip">
       {isYT ? (
@@ -801,20 +832,137 @@ function TipCard({ t, first }) {
           </div>
         </div>
 
-        {/* 1-Click Zerodha Kite & Terminal Execution */}
+        {/* Action Controls: Chart & Position Sizing Toggles */}
+        <div className="row" style={{ gap: 8, marginTop: 4 }}>
+          <button
+            type="button"
+            className={`btn btn-ghost ${showChart ? 'btn-blue' : ''}`}
+            onClick={toggleChart}
+            style={{ flex: 1, padding: '7px 12px', fontSize: 12, justifyContent: 'center' }}
+          >
+            <BarChart3 size={13} /> {showChart ? 'Hide Chart' : 'Inspect Candlestick Chart'}
+          </button>
+          <button
+            type="button"
+            className={`btn btn-ghost ${showCalc ? 'btn-blue' : ''}`}
+            onClick={() => setShowCalc(!showCalc)}
+            style={{ flex: 1, padding: '7px 12px', fontSize: 12, justifyContent: 'center' }}
+          >
+            <Calculator size={13} /> {showCalc ? 'Hide Math' : 'Position Size Calculator'}
+          </button>
+        </div>
+
+        {/* 1. Interactive Technical Candlestick Chart Drawer */}
+        {showChart && (
+          <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, border: '1px solid var(--line2)', marginTop: 8 }}>
+            <div className="row between" style={{ marginBottom: 8 }}>
+              <span style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--dim)', textTransform: 'uppercase' }}>
+                {t.ticker} 30-Day Daily Chart with Projected Levels
+              </span>
+              <div className="row" style={{ gap: 10, fontSize: 11 }}>
+                <span style={{ color: 'var(--green2)' }}>● Target: {inr(target)}</span>
+                <span style={{ color: 'var(--blue)' }}>● Entry: {inr(entry)}</span>
+                <span style={{ color: '#fb7185' }}>● SL: {inr(stoploss)}</span>
+              </div>
+            </div>
+
+            {loadingCandles ? (
+              <div style={{ height: 160, display: 'grid', placeItems: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                <Loader2 size={18} className="spin" /> Loading technical candlestick bars...
+              </div>
+            ) : candles.length > 0 ? (
+              <div style={{ height: 170, width: '100%' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={candles} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id={`chartGrad_${t.id}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--glow-accent)" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="var(--glow-accent)" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <XAxis dataKey="time" tick={{ fill: 'var(--dim)', fontSize: 10 }} tickLine={false} />
+                    <YAxis domain={['auto', 'auto']} tick={{ fill: 'var(--dim)', fontSize: 10 }} tickLine={false} />
+                    <Tooltip 
+                      contentStyle={{ background: '#0b121e', border: '1px solid var(--line2)', borderRadius: 8, fontSize: 12 }}
+                      formatter={(val) => [inr(val), 'Price']}
+                    />
+                    <Area type="monotone" dataKey="close" stroke="var(--glow-accent)" fill={`url(#chartGrad_${t.id})`} strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
+                Live historical ticks currently synchronizing.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 2. Interactive Real-Money Position Sizing & Margin Calculator */}
+        {showCalc && (
+          <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, border: '1px solid var(--line2)', marginTop: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--green2)', marginBottom: 10, textTransform: 'uppercase' }}>
+              ⚡ Institutional Risk & Capital Calculator
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--dim)', display: 'block', marginBottom: 4 }}>TOTAL CAPITAL (₹)</label>
+                <input 
+                  type="number" 
+                  className="input" 
+                  value={userCapital} 
+                  onChange={(e) => setUserCapital(Number(e.target.value) || 0)} 
+                  style={{ width: '100%', padding: '6px 10px', fontSize: 13 }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--dim)', display: 'block', marginBottom: 4 }}>MAX RISK BUDGET (₹)</label>
+                <input 
+                  type="number" 
+                  className="input" 
+                  value={riskPerTrade} 
+                  onChange={(e) => setRiskPerTrade(Number(e.target.value) || 0)} 
+                  style={{ width: '100%', padding: '6px 10px', fontSize: 13 }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, background: 'var(--panel2)', padding: 10, borderRadius: 8, textAlign: 'center' }}>
+              <div>
+                <small style={{ display: 'block', fontSize: 10, color: 'var(--dim)' }}>SUGGESTED QTY</small>
+                <b style={{ fontSize: 15, color: 'var(--text)' }}>{suggestedQty} shares</b>
+              </div>
+              <div>
+                <small style={{ display: 'block', fontSize: 10, color: 'var(--dim)' }}>TOTAL TRADE VALUE</small>
+                <b style={{ fontSize: 15, color: 'var(--text)' }}>{inr(totalCost)}</b>
+              </div>
+              <div>
+                <small style={{ display: 'block', fontSize: 10, color: 'var(--dim)' }}>PROFIT AT TARGET</small>
+                <b style={{ fontSize: 15, color: 'var(--green2)' }}>+{inr(expectedProfit)}</b>
+              </div>
+              <div>
+                <small style={{ display: 'block', fontSize: 10, color: 'var(--dim)' }}>RISK AT STOPLOSS</small>
+                <b style={{ fontSize: 15, color: '#fb7185' }}>-{inr(maxLoss)}</b>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 1-Click Zerodha Kite Order with Calculated Quantity */}
         <div className="row between" style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
           <span style={{ fontSize: 11.5, color: 'var(--dim)' }}>
-            Exchange: <b>NSE EQ</b>
+            Calculated Sizing: <b>{suggestedQty} Qty ({inr(totalCost)})</b>
           </span>
           <a
-            href={t.kite_basket_url || `https://kite.zerodha.com/connect/basket?tradingsymbol=${t.ticker}&exchange=NSE&transaction_type=${t.action}&order_type=LIMIT&price=${t.entry_price}`}
+            href={`https://kite.zerodha.com/connect/basket?tradingsymbol=${t.ticker}&exchange=NSE&transaction_type=${t.action}&order_type=LIMIT&price=${t.entry_price}&quantity=${suggestedQty}`}
             target="_blank"
             rel="noreferrer"
             className="btn btn-primary"
             style={{ padding: '6px 14px', fontSize: 12.5, gap: 6, textDecoration: 'none' }}
-            title="Pre-fills limit order directly on Zerodha Kite Connect"
+            title="Pre-fills limit order directly on Zerodha Kite Connect with optimal sizing"
           >
-            <span>⚡ Trade on Kite</span>
+            <span>⚡ Trade {suggestedQty} Qty on Kite</span>
             <ExternalLink size={12} />
           </a>
         </div>
@@ -829,16 +977,101 @@ function Feed({ data, loading, error, onSelectStock }) {
   const [hiConv, setHiConv] = useState(false);
   const tips = data?.recent_tips || [];
   const s = data?.stats || {};
-  const platforms = useMemo(() => ['ALL', ...new Set(tips.map((t) => t.platform))], [tips]);
-  
-  const shown = tips.filter((t) =>
-    (plat === 'ALL' || t.platform === plat) &&
-    (!hiConv || (t.ai_conviction_score ?? 0) >= 60) &&
-    (!q || `${t.ticker} ${t.company_name} ${t.creator_name}`.toLowerCase().includes(q.toLowerCase()))
-  );
+  const [radar, setRadar] = useState(null);
+  const [radarLoading, setRadarLoading] = useState(false);
+
+  useEffect(() => {
+    setRadarLoading(true);
+    api('/market-open-radar')
+      .then((d) => setRadar(d))
+      .catch(() => setRadar(null))
+      .finally(() => setRadarLoading(false));
+  }, []);
+
+  const platforms = ['ALL', 'YouTube', 'Twitter/X', 'Telegram'];
+  const shown = tips.filter((t) => {
+    if (plat !== 'ALL' && t.platform !== plat) return false;
+    if (hiConv && (t.ai_conviction_score || 0) < 60) return false;
+    if (!q) return true;
+    const s = q.toLowerCase();
+    return (
+      (t.ticker || '').toLowerCase().includes(s) ||
+      (t.company_name || '').toLowerCase().includes(s) ||
+      (t.influencer_name || '').toLowerCase().includes(s)
+    );
+  });
 
   return (
     <>
+      {/* 9:15 AM MARKET OPEN TRAP & ALPHA RADAR */}
+      {radar && (radar.actionable_now?.length > 0 || radar.danger_traps?.length > 0) && (
+        <div className="card" style={{ padding: 20, marginBottom: 20, border: '1px solid var(--line2)', background: 'linear-gradient(145deg, rgba(16,185,129,0.06), rgba(15,23,42,0.6))' }}>
+          <div className="row between" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+            <div className="row" style={{ gap: 8 }}>
+              <span className="live-dot" />
+              <b style={{ fontSize: 13, letterSpacing: 0.8, color: 'var(--green2)', textTransform: 'uppercase' }}>
+                9:15 AM Market Open Radar & Trap Shield
+              </b>
+              <span className="pill pill-open" style={{ fontSize: 10 }}>DAILY ACTIVE SETUPS</span>
+            </div>
+            <span style={{ fontSize: 12, color: 'var(--dim)', fontFamily: 'var(--mono)' }}>
+              {radar.market_regime}
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+            {/* 1. Actionable Setups Near Entry */}
+            <div style={{ background: 'var(--panel2)', borderRadius: 10, padding: 14, border: '1px solid rgba(16,185,129,0.25)' }}>
+              <div className="row" style={{ color: 'var(--green2)', fontWeight: 800, fontSize: 12, marginBottom: 10, gap: 6 }}>
+                <CheckCircle2 size={14} /> ACTIONABLE TODAY (IN SWEET SPOT ±2.5%)
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {radar.actionable_now?.slice(0, 3).map((a) => (
+                  <div key={a.id} className="row between" style={{ padding: '8px 10px', background: 'var(--bg)', borderRadius: 6, fontSize: 12.5 }}>
+                    <div>
+                      <b style={{ color: 'var(--text)' }}>{a.ticker}</b>
+                      <span style={{ color: 'var(--dim)', marginLeft: 6 }}>CMP: {inr(a.current_price)}</span>
+                    </div>
+                    <div className="row" style={{ gap: 8 }}>
+                      <span style={{ color: a.distance_from_entry_pct >= 0 ? 'var(--green2)' : 'var(--blue)', fontWeight: 700 }}>
+                        {a.distance_from_entry_pct >= 0 ? `+${a.distance_from_entry_pct}%` : `${a.distance_from_entry_pct}%`} vs Entry
+                      </span>
+                      <a 
+                        href={`https://kite.zerodha.com/connect/basket?tradingsymbol=${a.ticker}&exchange=NSE&transaction_type=${a.action}&order_type=LIMIT&price=${a.current_price}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-primary"
+                        style={{ padding: '3px 8px', fontSize: 10.5 }}
+                      >
+                        Trade
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 2. Danger Traps (Breached Stop Losses) */}
+            <div style={{ background: 'var(--panel2)', borderRadius: 10, padding: 14, border: '1px solid rgba(244,63,94,0.25)' }}>
+              <div className="row" style={{ color: '#fb7185', fontWeight: 800, fontSize: 12, marginBottom: 10, gap: 6 }}>
+                <AlertTriangle size={14} /> STOP-LOSS TRAP ALERTS (DO NOT CHASE)
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {radar.danger_traps?.slice(0, 3).map((t) => (
+                  <div key={t.id} className="row between" style={{ padding: '8px 10px', background: 'var(--bg)', borderRadius: 6, fontSize: 12.5 }}>
+                    <div>
+                      <b style={{ color: '#fb7185' }}>{t.ticker}</b>
+                      <span style={{ color: 'var(--dim)', marginLeft: 6 }}>{t.trap_reason}</span>
+                    </div>
+                    <span className="pill pill-miss" style={{ fontSize: 10 }}>INVALIDATED</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="hero card">
         <div>
           <div className="eyebrow"><Sparkles size={13} /> Institutional Finfluencer Auditor</div>
@@ -1219,6 +1452,7 @@ function Rankings() {
                 <th>Max Drawdown</th>
                 <th>Trust Score</th>
                 <th>Grade</th>
+                <th>Audit Report</th>
               </tr>
             </thead>
             <tbody>
@@ -1252,6 +1486,26 @@ function Rankings() {
                     </div>
                   </td>
                   <td><span className={`pill ${r.grade === 'A' ? 'pill-hit' : r.grade === 'F' || r.grade === 'D' ? 'pill-miss' : 'pill-open'}`}>{r.grade}</span></td>
+                  <td>
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: 11, padding: '4px 8px', gap: 4 }}
+                      onClick={() => {
+                        const tweetText = encodeURIComponent(
+                          `📊 MarketProbe Audit Report Card: ${r.name} (${r.handle})\n` +
+                          `• Win Rate: ${r.win_rate}%\n` +
+                          `• Max Drawdown: ${r.max_drawdown}%\n` +
+                          `• Reliability Grade: ${r.grade}\n` +
+                          `• SEBI Status: ${r.is_sebi ? 'Registered' : 'Unregistered'}\n` +
+                          `Tracked autonomously on MarketProbe Terminal 🚀`
+                        );
+                        window.open(`https://twitter.com/intent/tweet?text=${tweetText}`, '_blank');
+                      }}
+                      title="Share verified audit card on X / Twitter"
+                    >
+                      <Share2 size={12} /> Share Card
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
