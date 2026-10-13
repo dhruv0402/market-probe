@@ -1,25 +1,20 @@
 services:
-  # Backend API + ML Inference Engine
   - type: web
-    name: marketprobe-backend
-    runtime: python
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "uvicorn src.backend.api:app --host 0.0.0.0 --port $PORT"
+    name: marketprobe
+    env: docker
+    dockerfilePath: Dockerfile
+    plan: starter
+    region: singapore
+    disk:
+      name: marketprobe-data
+      mountPath: /app/data
+      sizeGB: 1
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9
+      - key: PORT
+        value: 8080
+      - key: MARKETPROBE_SECRET_KEY
+        generateValue: true
       - key: MARKETPROBE_DB_PATH
-        value: /opt/render/project/src/data/marketprobe.db
+        value: /app/data/marketprobe.db
       - key: MARKETPROBE_MODEL_PATH
-        value: /opt/render/project/src/data/xgb_model.pkl
-
-  # Automated Daily 3:45 PM Market Close Pipeline
-  - type: cron
-    name: marketprobe-daily-pipeline
-    runtime: python
-    schedule: "15 10 * * 1-5" # 10:15 UTC = 3:45 PM IST (Monday - Friday)
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "python run_overnight_pipeline.py"
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9
+        value: /app/data/xgb_model.pkl
