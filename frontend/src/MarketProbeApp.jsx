@@ -239,34 +239,40 @@ function OAuthModal({ open, onClose, onAuth }) {
         <div className="divider">or standard fund credentials</div>
 
         <div className="tabs2">
-          <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setErr(''); }}>Log in</button>
-          <button type="button" className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setErr(''); }}>Sign up</button>
+          <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setErr(''); }}>Institutional Login</button>
+          <button type="button" className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setErr(''); }}>Register Trader Account</button>
         </div>
 
         <form className="auth-form" onSubmit={submit}>
           {mode === 'signup' && (
             <label>
-              Full Name
-              <input className="input" value={form.name} onChange={set('name')} placeholder="Dr. Vikram Sen" />
+              Full Legal / Fund Name
+              <input className="input" value={form.name} onChange={set('name')} placeholder="Dr. Vikram Sen / Apex Quant Fund" required />
             </label>
           )}
           <label>
-            Email Address
-            <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="trader@hedgefund.in" autoComplete="email" />
+            Corporate / Trader Email Address
+            <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="trader@hedgefund.in" autoComplete="email" required />
           </label>
           <label>
             Password
-            <input className="input" type="password" value={form.password} onChange={set('password')} placeholder="••••••••••••" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+            <input className="input" type="password" value={form.password} onChange={set('password')} placeholder="Minimum 6 characters" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required />
           </label>
 
-          {err && <div className="err">{err}</div>}
+          {err && (
+            <div className="err" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertTriangle size={16} color="#fb7185" style={{ flexShrink: 0 }} />
+              <span>{err}</span>
+            </div>
+          )}
 
-          <button className="btn btn-primary btn-lg" style={{ justifyContent: 'center', marginTop: 4 }} disabled={busy}>
-            {busy ? <Loader2 size={16} className="spin" /> : null}{mode === 'login' ? 'Enter Trading Terminal' : 'Create Free Account'}
+          <button className="btn btn-primary btn-lg" style={{ justifyContent: 'center', marginTop: 8 }} disabled={busy}>
+            {busy ? <Loader2 size={16} className="spin" /> : <Lock size={16} />}
+            {mode === 'login' ? 'Authenticate & Enter Terminal' : 'Create Quantitative Account'}
           </button>
 
           <button type="button" className="btn btn-ghost" style={{ justifyContent: 'center', marginTop: 4 }} onClick={launchDemo} disabled={busy}>
-            <PlayCircle size={15} color="var(--green2)" /> Instant 1-Click Interactive Demo
+            <PlayCircle size={15} color="var(--green2)" /> Launch Verified Demo Trader Session
           </button>
         </form>
       </div>
@@ -2136,6 +2142,26 @@ export default function MarketProbeApp() {
     localStorage.setItem('mp_glow', glow);
     document.documentElement.setAttribute('data-glow', glow);
   }, [glow]);
+
+  // Validate active JWT session on startup
+  useEffect(() => {
+    const token = localStorage.getItem('mp_token');
+    if (token) {
+      api('/auth/me')
+        .then((data) => {
+          if (data && data.user) {
+            setUser(data.user);
+            localStorage.setItem('mp_user', JSON.stringify(data.user));
+          }
+        })
+        .catch(() => {
+          // Token expired or invalid, log out cleanly
+          localStorage.removeItem('mp_token');
+          localStorage.removeItem('mp_user');
+          setUser(null);
+        });
+    }
+  }, []);
 
   useEffect(() => {
     if (!user) return;

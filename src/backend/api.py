@@ -457,25 +457,30 @@ class RegisterRequest(BaseModel):
 
 @app.post("/api/auth/login")
 def login_user(req: LoginRequest):
-    user = get_user_by_email(req.email) or USER_DB.get(req.email)
-    if not user:
-        # Auto-create for seamless SaaS onboarding demo
-        user = {
-            "id": f"usr_{int(time.time())}",
-            "email": req.email.lower(),
-            "name": req.email.split("@")[0].capitalize(),
-            "password_hash": hash_password(req.password),
-            "role": "pro_trader",
-            "tier": "pro",
-            "provider": "email",
-            "api_key": f"mp_live_{abs(hash(req.email))}"
-        }
-        USER_DB[req.email] = user
-        save_user(user)
-    elif not verify_password(req.password, user.get("password_hash", "")):
-        # Allow default demo password pass-through
-        if req.password not in ["password", "demo123", "marketprobe"]:
-            raise HTTPException(status_code=401, detail="Invalid email or password.")
+    email_clean = req.email.strip().lower()
+    user = get_user_by_email(email_clean) or USER_DB.get(email_clean)
+    
+    # Handle dedicated verified demo account safely
+    if email_clean == "demo@marketprobe.in":
+        if not user:
+            user = {
+                "id": "usr_demo_001",
+                "email": "demo@marketprobe.in",
+                "name": "MarketProbe Demo Trader",
+                "password_hash": hash_password("demo123"),
+                "role": "pro_trader",
+                "tier": "pro",
+                "provider": "email",
+                "api_key": "mp_live_demo_992837418293847"
+            }
+            save_user(user)
+        if req.password != "demo123" and not verify_password(req.password, user.get("password_hash", "")):
+            raise HTTPException(status_code=401, detail="Invalid credentials for demo account.")
+    else:
+        if not user:
+            raise HTTPException(status_code=401, detail="No account found with this email. Please sign up first.")
+        if not verify_password(req.password, user.get("password_hash", "")):
+            raise HTTPException(status_code=401, detail="Incorrect password. Please verify your credentials.")
             
     token = create_jwt_token({
         "sub": user["id"],
