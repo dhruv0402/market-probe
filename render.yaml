@@ -3,12 +3,8 @@ services:
     name: marketprobe
     env: docker
     dockerfilePath: Dockerfile
-    plan: starter
+    plan: free
     region: singapore
-    disk:
-      name: marketprobe-data
-      mountPath: /app/data
-      sizeGB: 1
     envVars:
       - key: PORT
         value: 8080
