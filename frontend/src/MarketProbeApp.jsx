@@ -5,7 +5,7 @@ import {
   ExternalLink, Zap, Database, TrendingUp, TrendingDown, 
   Layers, ChevronRight, BarChart3, AlertTriangle, Sparkles,
   Bell, Download, ArrowRight, Lock, Key, Users, Check, X, Shield, Globe,
-  Sun, Moon, Palette, Bookmark, CreditCard, Star
+  Sun, Moon, Palette, Bookmark, CreditCard, Star, Maximize2, Clock, Copy, ChevronDown
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import Tour from './Tour.jsx';
@@ -693,7 +693,8 @@ function LandingPage({ onOpenAuth, onLaunchDemo, theme, setTheme, glow, setGlow 
 /* ---------------------------------- FEED ---------------------------------- */
 function TipCard({ t, first }) {
   const [playing, setPlaying] = useState(false);
-  const [showChart, setShowChart] = useState(false);
+  const [showTheater, setShowTheater] = useState(false);
+  const [showChart, setShowChart] = useState(true);
   const [showCalc, setShowCalc] = useState(false);
   const [candles, setCandles] = useState([]);
   const [loadingCandles, setLoadingCandles] = useState(false);
@@ -717,6 +718,23 @@ function TipCard({ t, first }) {
   const expectedProfit = suggestedQty * perShareReward;
   const maxLoss = suggestedQty * perShareRisk;
 
+  // Load candles on component mount so chart renders directly by default
+  useEffect(() => {
+    let mounted = true;
+    setLoadingCandles(true);
+    api(`/stock-candles?symbol=${t.ticker}&period=1mo&interval=1d`)
+      .then((d) => {
+        if (mounted) setCandles(d.candles || []);
+      })
+      .catch(() => {
+        if (mounted) setCandles([]);
+      })
+      .finally(() => {
+        if (mounted) setLoadingCandles(false);
+      });
+    return () => { mounted = false; };
+  }, [t.ticker]);
+
   const toggleChart = () => {
     if (!showChart && candles.length === 0) {
       setLoadingCandles(true);
@@ -730,6 +748,7 @@ function TipCard({ t, first }) {
 
   const [copiedKite, setCopiedKite] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
+  const [activeBroker, setActiveBroker] = useState('ZERODHA');
 
   const copyKitePayload = (e) => {
     e?.stopPropagation();
@@ -740,6 +759,7 @@ function TipCard({ t, first }) {
   };
 
   const tvSymbol = t.ticker.startsWith('^') ? 'NSE:NIFTY' : `NSE:${t.ticker}`;
+  const rawSymbol = t.ticker.replace('.NS', '').replace('^', '');
 
   return (
     <div className="card tip">
@@ -747,17 +767,30 @@ function TipCard({ t, first }) {
         <div className="tip-media" data-tour={first ? 'tip-video' : undefined}>
           {playing ? (
             <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-              <button
-                type="button"
-                className="tip-close-media"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPlaying(false);
-                }}
-                title="Close video preview"
-              >
-                <X size={15} />
-              </button>
+              <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  className="tip-close-media"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowTheater(true);
+                  }}
+                  title="Expand to Theater Mode"
+                >
+                  <Maximize2 size={13} />
+                </button>
+                <button
+                  type="button"
+                  className="tip-close-media"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPlaying(false);
+                  }}
+                  title="Close video preview"
+                >
+                  <X size={15} />
+                </button>
+              </div>
               <iframe 
                 src={`https://www.youtube.com/embed/${t.video_id}?start=${t.timestamp_seconds || 0}&autoplay=1`} 
                 title={t.video_title} 
@@ -780,6 +813,18 @@ function TipCard({ t, first }) {
                 <Play size={10} fill="#ef4444" color="#ef4444" />
                 <span>YOUTUBE AUDIT RECORD</span>
               </div>
+              <button
+                type="button"
+                className="tip-close-media"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowTheater(true);
+                }}
+                style={{ position: 'absolute', top: 10, right: 10, zIndex: 5 }}
+                title="Theater Mode"
+              >
+                <Maximize2 size={13} />
+              </button>
               <div className="tip-play">
                 <span><Play size={24} fill="#fff" color="#fff" style={{ marginLeft: 2 }} /></span>
               </div>
@@ -998,7 +1043,7 @@ function TipCard({ t, first }) {
           </div>
         )}
 
-        {/* Order Execution Bar: Direct TradingView Chart Link + Kite Order Ticket Modal */}
+        {/* Order Execution Bar: Direct TradingView Chart Link + Multi-Broker Order Ticket Modal */}
         <div className="row between" style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
           <div className="row" style={{ gap: 6 }}>
             <a
@@ -1013,17 +1058,16 @@ function TipCard({ t, first }) {
               <span>TV Chart</span>
             </a>
             {isYT && (
-              <a
-                href={`https://www.youtube.com/watch?v=${t.video_id}${t.timestamp_seconds ? `&t=${t.timestamp_seconds}` : ''}`}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
                 className="btn btn-ghost"
-                style={{ padding: '6px 10px', fontSize: 12, gap: 4, textDecoration: 'none', color: '#ef4444' }}
-                title="Open original YouTube video timestamp"
+                onClick={() => setShowTheater(true)}
+                style={{ padding: '6px 10px', fontSize: 12, gap: 4, color: '#ef4444' }}
+                title="Open Theater Mode with timestamp breakdowns"
               >
-                <Play size={11} fill="#ef4444" />
-                <span>YouTube</span>
-              </a>
+                <Maximize2 size={11} />
+                <span>Theater Mode</span>
+              </button>
             )}
           </div>
 
@@ -1033,7 +1077,7 @@ function TipCard({ t, first }) {
               className="btn btn-ghost"
               onClick={copyKitePayload}
               style={{ padding: '6px 12px', fontSize: 12, gap: 5 }}
-              title="Copy order details formatted for Zerodha Kite"
+              title="Copy formatted trade parameters"
             >
               <Copy size={12} />
               <span>{copiedKite ? '✓ Copied' : 'Copy Order'}</span>
@@ -1043,21 +1087,22 @@ function TipCard({ t, first }) {
               className="btn btn-primary"
               onClick={() => setShowOrderModal(true)}
               style={{ padding: '6px 14px', fontSize: 12.5, gap: 6 }}
-              title="Open execution order ticket for Zerodha Kite"
+              title="Execute order across Zerodha, Groww, Upstox, or Angel One"
             >
-              <span>⚡ Trade {suggestedQty} Qty on Kite</span>
+              <span>⚡ Execute {suggestedQty} Qty</span>
+              <ChevronDown size={13} />
             </button>
           </div>
         </div>
 
-        {/* Kite Order Ticket Modal */}
+        {/* Multi-Broker Execution Modal (Zerodha, Groww, Upstox, Angel One) */}
         {showOrderModal && (
           <div style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.78)',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
+            background: 'rgba(0,0,0,0.82)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
             zIndex: 9999,
             display: 'grid',
             placeItems: 'center',
@@ -1066,58 +1111,128 @@ function TipCard({ t, first }) {
             <div style={{
               background: '#0d131f',
               border: '1px solid var(--line2)',
-              borderRadius: 14,
+              borderRadius: 16,
               padding: 24,
-              maxWidth: 440,
+              maxWidth: 480,
               width: '100%',
-              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.85)'
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.9)'
             }} onClick={(e) => e.stopPropagation()}>
               <div className="row between" style={{ marginBottom: 16, borderBottom: '1px solid var(--line)', paddingBottom: 12 }}>
                 <div className="row" style={{ gap: 8 }}>
                   <span className={`pill ${t.action === 'BUY' ? 'pill-buy' : 'pill-sell'}`} style={{ fontSize: 13 }}>
                     {t.action} {t.ticker}
                   </span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Zerodha Kite Order Ticket</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>Institutional Multi-Broker Router</span>
                 </div>
                 <button type="button" className="btn-ghost" style={{ padding: 4 }} onClick={() => setShowOrderModal(false)}>
                   <X size={18} />
                 </button>
               </div>
 
+              {/* Broker Switcher Tabs */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 16 }}>
+                {[
+                  { id: 'ZERODHA', label: 'Zerodha', color: '#ff5722' },
+                  { id: 'GROWW', label: 'Groww', color: '#00d09c' },
+                  { id: 'UPSTOX', label: 'Upstox', color: '#6c5ce7' },
+                  { id: 'ANGELONE', label: 'Angel One', color: '#eb3b5a' }
+                ].map((b) => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => setActiveBroker(b.id)}
+                    className="btn"
+                    style={{
+                      padding: '8px 4px',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      justifyContent: 'center',
+                      borderRadius: 8,
+                      background: activeBroker === b.id ? 'var(--panel2)' : 'transparent',
+                      borderColor: activeBroker === b.id ? b.color : 'var(--line)',
+                      color: activeBroker === b.id ? '#fff' : 'var(--dim)',
+                      boxShadow: activeBroker === b.id ? `0 0 12px ${b.color}33` : 'none'
+                    }}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Order Ticket Matrix */}
               <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, border: '1px solid var(--line)', marginBottom: 16 }}>
                 <div className="row between" style={{ marginBottom: 8, fontSize: 12.5 }}>
                   <span style={{ color: 'var(--dim)' }}>Instrument:</span>
-                  <b style={{ color: 'var(--text)', fontFamily: 'var(--mono)' }}>NSE:{t.ticker}</b>
+                  <b style={{ color: 'var(--text)', fontFamily: 'var(--mono)' }}>NSE:{rawSymbol}</b>
                 </div>
                 <div className="row between" style={{ marginBottom: 8, fontSize: 12.5 }}>
-                  <span style={{ color: 'var(--dim)' }}>Calculated Sizing:</span>
+                  <span style={{ color: 'var(--dim)' }}>Recommended Sizing:</span>
                   <b style={{ color: 'var(--blue)' }}>{suggestedQty} Shares ({inr(totalCost)})</b>
                 </div>
                 <div className="row between" style={{ marginBottom: 8, fontSize: 12.5 }}>
-                  <span style={{ color: 'var(--dim)' }}>Limit Entry Price:</span>
-                  <b style={{ color: 'var(--text)' }}>{inr(t.entry_price)}</b>
-                </div>
-                <div className="row between" style={{ marginBottom: 8, fontSize: 12.5 }}>
-                  <span style={{ color: 'var(--dim)' }}>Target Price:</span>
+                  <span style={{ color: 'var(--dim)' }}>Target Limit:</span>
                   <b style={{ color: 'var(--green2)' }}>{inr(t.target_price)} (+{t.upside_pct || 8}%)</b>
                 </div>
                 <div className="row between" style={{ fontSize: 12.5 }}>
-                  <span style={{ color: 'var(--dim)' }}>Stop Loss:</span>
+                  <span style={{ color: 'var(--dim)' }}>Strict Stop Loss:</span>
                   <b style={{ color: '#fb7185' }}>{inr(t.stoploss_price)} (-{Math.abs(t.risk_pct || 4)}%)</b>
                 </div>
               </div>
 
+              {/* Dynamic Execution Action based on selected broker */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <a
-                  href={`https://kite.zerodha.com/chart/ext/ciq/NSE/${t.ticker}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn btn-primary"
-                  style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', fontSize: 13.5, gap: 8, textDecoration: 'none' }}
-                  onClick={copyKitePayload}
-                >
-                  <ExternalLink size={14} /> Launch Zerodha Kite & Copy Order
-                </a>
+                {activeBroker === 'ZERODHA' && (
+                  <a
+                    href={`https://kite.zerodha.com/chart/ext/ciq/NSE/${rawSymbol}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-primary"
+                    style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', fontSize: 13.5, gap: 8, textDecoration: 'none', background: '#ff5722', borderColor: '#ff5722' }}
+                    onClick={copyKitePayload}
+                  >
+                    <ExternalLink size={14} /> Launch Zerodha Kite & Copy Payload
+                  </a>
+                )}
+
+                {activeBroker === 'GROWW' && (
+                  <a
+                    href={`https://groww.in/stocks/${rawSymbol.toLowerCase()}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-primary"
+                    style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', fontSize: 13.5, gap: 8, textDecoration: 'none', background: '#00d09c', borderColor: '#00d09c', color: '#000' }}
+                    onClick={copyKitePayload}
+                  >
+                    <ExternalLink size={14} /> Open in Groww & Copy Payload
+                  </a>
+                )}
+
+                {activeBroker === 'UPSTOX' && (
+                  <a
+                    href={`https://pro.upstox.com/`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-primary"
+                    style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', fontSize: 13.5, gap: 8, textDecoration: 'none', background: '#6c5ce7', borderColor: '#6c5ce7' }}
+                    onClick={copyKitePayload}
+                  >
+                    <ExternalLink size={14} /> Open Upstox Pro & Copy Payload
+                  </a>
+                )}
+
+                {activeBroker === 'ANGELONE' && (
+                  <a
+                    href={`https://trade.angelone.in/`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-primary"
+                    style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', fontSize: 13.5, gap: 8, textDecoration: 'none', background: '#eb3b5a', borderColor: '#eb3b5a' }}
+                    onClick={copyKitePayload}
+                  >
+                    <ExternalLink size={14} /> Open Angel One & Copy Payload
+                  </a>
+                )}
+
                 <a
                   href={`https://www.tradingview.com/chart/?symbol=${tvSymbol}`}
                   target="_blank"
@@ -1125,16 +1240,111 @@ function TipCard({ t, first }) {
                   className="btn btn-ghost"
                   style={{ width: '100%', justifyContent: 'center', padding: '8px 16px', fontSize: 12.5, gap: 6, textDecoration: 'none' }}
                 >
-                  <ExternalLink size={13} /> View TradingView Pro Chart
+                  <ExternalLink size={13} /> View Real-Time TradingView Terminal
                 </a>
+
                 <button
                   type="button"
                   className="btn btn-ghost"
                   onClick={copyKitePayload}
                   style={{ width: '100%', justifyContent: 'center', padding: '8px 16px', fontSize: 12.5, gap: 6 }}
                 >
-                  <Copy size={13} /> {copiedKite ? '✓ Order Details Copied to Clipboard!' : 'Copy Order Parameters Text'}
+                  <Copy size={13} /> {copiedKite ? '✓ Parameters Copied to Clipboard!' : 'Copy Formatted Order Details'}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Full-Screen YouTube Theater / Audit Mode Modal */}
+        {showTheater && isYT && (
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(2,6,23,0.92)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            zIndex: 10000,
+            display: 'grid',
+            placeItems: 'center',
+            padding: 20
+          }} onClick={() => setShowTheater(false)}>
+            <div style={{
+              background: '#090d16',
+              border: '1px solid var(--line2)',
+              borderRadius: 16,
+              maxWidth: 960,
+              width: '100%',
+              overflow: 'hidden',
+              boxShadow: '0 30px 60px -15px rgba(0,0,0,0.95)'
+            }} onClick={(e) => e.stopPropagation()}>
+              <div className="row between" style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)' }}>
+                <div className="row" style={{ gap: 10 }}>
+                  <div className="tip-yt" style={{ position: 'static' }}>
+                    <Play size={10} fill="#ef4444" color="#ef4444" />
+                    <span>YOUTUBE AUDIT THEATER</span>
+                  </div>
+                  <b style={{ fontSize: 14, color: 'var(--text)' }}>
+                    {t.ticker} Recommendation Replay
+                  </b>
+                </div>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  style={{ padding: 6, borderRadius: '50%' }}
+                  onClick={() => setShowTheater(false)}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000' }}>
+                <iframe 
+                  src={`https://www.youtube.com/embed/${t.video_id}?start=${t.timestamp_seconds || 0}&autoplay=1`} 
+                  title={t.video_title} 
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                  allowFullScreen 
+                  style={{ width: '100%', height: '100%', border: 0 }}
+                />
+              </div>
+
+              <div style={{ padding: '16px 20px', background: 'var(--panel2)' }}>
+                <div className="row between" style={{ marginBottom: 10 }}>
+                  <div>
+                    <h3 style={{ fontSize: 16, margin: 0, color: 'var(--text)' }}>{t.video_title}</h3>
+                    <div style={{ fontSize: 12, color: 'var(--dim)', marginTop: 4 }}>
+                      Channel: <b style={{ color: 'var(--text)' }}>{t.creator_name}</b> · Call Timestamp: <b style={{ color: '#ef4444' }}>@{t.timestamp_str || '00:00'}</b>
+                    </div>
+                  </div>
+                  <div className="row" style={{ gap: 8 }}>
+                    <a
+                      href={`https://www.youtube.com/watch?v=${t.video_id}&t=${t.timestamp_seconds || 0}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-ghost"
+                      style={{ padding: '6px 12px', fontSize: 12, gap: 5, color: '#ef4444' }}
+                    >
+                      <ExternalLink size={12} /> Open on YouTube
+                    </a>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        setShowTheater(false);
+                        setShowOrderModal(true);
+                      }}
+                      style={{ padding: '6px 14px', fontSize: 12 }}
+                    >
+                      Execute Trade
+                    </button>
+                  </div>
+                </div>
+
+                {t.quote && (
+                  <div className="quote" style={{ margin: 0, fontSize: 13.5 }}>
+                    "{t.quote}"
+                  </div>
+                )}
               </div>
             </div>
           </div>
