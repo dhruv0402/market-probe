@@ -1546,7 +1546,7 @@ def get_high_conviction_alerts(min_conviction: float = Query(60.0, description="
     return {"total_alerts": len(alerts), "min_conviction_threshold": min_conviction, "alerts": alerts}
 
 @app.get("/api/export/sebi-audit")
-def export_sebi_compliance_audit(format: str = Query("json", regex="^(json|csv)$")):
+def export_sebi_compliance_audit(format: str = Query("json", pattern="^(json|csv)$")):
     """Generates an official SEBI compliance audit trail report for regulatory oversight and institutional review."""
     conn = get_db()
     cur = conn.cursor()
