@@ -1191,16 +1191,30 @@ function TipCard({ t, first }) {
               {/* Dynamic Execution Action based on selected broker */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {activeBroker === 'ZERODHA' && (
-                  <a
-                    href={`https://kite.zerodha.com/chart/ext/ciq/NSE/${rawSymbol}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn btn-primary"
-                    style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', fontSize: 13.5, gap: 8, textDecoration: 'none', background: '#ff5722', borderColor: '#ff5722' }}
-                    onClick={copyKitePayload}
-                  >
-                    <ExternalLink size={14} /> Launch Zerodha Kite & Copy Payload
-                  </a>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <a
+                      href={`https://kite.zerodha.com/marketwatch?search=${encodeURIComponent(rawSymbol)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-primary"
+                      style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', fontSize: 13.5, gap: 8, textDecoration: 'none', background: '#ff5722', borderColor: '#ff5722' }}
+                      onClick={copyKitePayload}
+                    >
+                      <ExternalLink size={14} /> Open {rawSymbol} in Zerodha Kite & Copy Order
+                    </a>
+                    <div className="row between" style={{ fontSize: 11, color: 'var(--dim)', padding: '0 4px' }}>
+                      <span>Kite Auto-Search Link</span>
+                      <a 
+                        href={`https://kite.zerodha.com/chart/ext/tvc/NSE/${rawSymbol}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: 'var(--blue)', textDecoration: 'underline' }}
+                        onClick={copyKitePayload}
+                      >
+                        Alternative: Kite TV Chart
+                      </a>
+                    </div>
+                  </div>
                 )}
 
                 {activeBroker === 'GROWW' && (

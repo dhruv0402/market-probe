@@ -26,7 +26,9 @@ FALSE_POSITIVE_WORDS = {
     'BAD', 'MORE', 'LESS', 'BEST', 'VIEW', 'NEWS', 'RATE', 'HOLD', 'SELL', 'BUY', 'LONG',
     'SHORT', 'LOT', 'BANK', 'AUTO', 'OIL', 'GAS', 'GOLD', 'TECH', 'MEDIA', 'REAL', 'BIG',
     'FUND', 'FUNDS', 'SIP', 'CRORE', 'LAKH', 'RUPEE', 'PRICE', 'CHART', 'TREND', 'NEXT',
-    'CALLS', 'LEVELS', 'POINTS', 'SUPPORT', 'RESISTANCE', 'BREAKOUT', 'STRONG', 'VOLUME'
+    'CALLS', 'LEVELS', 'POINTS', 'SUPPORT', 'RESISTANCE', 'BREAKOUT', 'STRONG', 'VOLUME',
+    'EMKAY', 'MOTILALOFS', 'ANGELONE', 'SHAREKHAN', 'ICICIDIRECT', 'KOTAKSEC',
+    'GLOBAL', 'BANG', 'TOTAL', 'FOCUS', 'CHOICE', 'PRIME', 'STAR', 'FIRST', 'SIMPLE', 'CARE'
 }
 
 POPULAR_ALIASES = {
@@ -185,8 +187,9 @@ class PrecisionFinancialNER:
             if cand in self.valid_symbols and cand in self.equity_by_symbol:
                 matched_ticker, matched_company = self.equity_by_symbol[cand]
 
-        # Clean author/broker attribution brackets like [HDFC Securities...] and hashtags like #NIFTY #StockMarket
+        # Clean author/broker attribution brackets and common brokerage prefixes
         cleaned_text = re.sub(r'\[[^\]]*\]', ' ', text_clean)
+        cleaned_text = re.sub(r'^(?:HDFC\s*(?:Sec(?:urities)?|Sec)?|Motilal\s*Oswal|ICICI\s*Direct|Kotak\s*Sec(?:urities)?|Axis\s*Sec(?:urities)?|Angel\s*One|Sharekhan|Emkay(?:\s*Global)?|Prabhudas\s*Lilladher|Nirmal\s*Bang)\s*(?:recommends?|has|with|suggests?|buy|sell|call)?\b', ' ', cleaned_text, flags=re.IGNORECASE)
         cleaned_no_hash = re.sub(r'#\w+', ' ', cleaned_text)
         text_upper = cleaned_no_hash.upper()
 
@@ -242,12 +245,7 @@ class PrecisionFinancialNER:
         target_price = None
         stoploss_price = None
 
-        cmp_match = re.search(r'(?:CMP|ENTRY|AT|@|AROUND|BUY AT|BUY|SELL AT|PRICE|ABOVE|BELOW)\s*[:=-]?\s*(?:RS\.?|INR|₹)?\s*(\d{1,6}(?:\.\d{1,2})?)', text_clean, re.IGNORECASE)
-        if cmp_match:
-            try: entry_price = float(cmp_match.group(1))
-            except: pass
-
-        tgt_match = re.search(r'(?:TARGET|TGT|GOAL|LEVEL|TO|FOR TARGET)\s*[:=-]?\s*(?:RS\.?|INR|₹)?\s*(\d{1,6}(?:\.\d{1,2})?)', text_clean, re.IGNORECASE)
+        tgt_match = re.search(r'(?:TARGET\s*PRICE(?:\s*OF)?|TARGET|TGT|GOAL|LEVEL|FOR TARGET|TARGET OF)\s*[:=-]?\s*(?:RS\.?|INR|₹)?\s*(\d{1,6}(?:\.\d{1,2})?)', text_clean, re.IGNORECASE)
         if tgt_match:
             try: target_price = float(tgt_match.group(1))
             except: pass
@@ -257,36 +255,51 @@ class PrecisionFinancialNER:
             try: stoploss_price = float(sl_match.group(1))
             except: pass
 
+        cmp_match = re.search(r'(?:CMP|ENTRY|AT|@|AROUND|BUY AT|SELL AT|RECOMMENDED AT|ENTRY LEVEL)\s*[:=-]?\s*(?:RS\.?|INR|₹)?\s*(\d{1,6}(?:\.\d{1,2})?)', text_clean, re.IGNORECASE)
+        if cmp_match:
+            try: entry_price = float(cmp_match.group(1))
+            except: pass
+
         numbers = [float(n) for n in re.findall(r'\b\d{1,6}(?:\.\d{1,2})?\b', text_clean) if 1.0 <= float(n) <= 150000.0]
+        used_numbers = {x for x in [target_price, stoploss_price] if x is not None}
+        available_numbers = [n for n in numbers if n not in used_numbers]
         
         if matched_ticker in ['^NSEI', 'NIFTY'] and not entry_price:
             entry_price = 24100.0
-            target_price = 24350.0
-            stoploss_price = 23950.0
+            target_price = target_price or 24350.0
+            stoploss_price = stoploss_price or 23950.0
         elif matched_ticker in ['^NSEBANK', 'BANKNIFTY'] and not entry_price:
             entry_price = 57500.0
-            target_price = 58200.0
-            stoploss_price = 57100.0
+            target_price = target_price or 58200.0
+            stoploss_price = stoploss_price or 57100.0
 
-        if not entry_price and len(numbers) >= 1:
-            entry_price = numbers[0]
+        if not entry_price and len(available_numbers) >= 1:
+            entry_price = available_numbers[0]
             
         if not target_price:
-            if len(numbers) >= 2 and numbers[1] != entry_price:
-                target_price = numbers[1]
+            if len(available_numbers) >= 2 and available_numbers[1] != entry_price:
+                target_price = available_numbers[1]
             elif entry_price:
                 target_price = round(entry_price * (1.08 if action == "BUY" else 0.92), 2)
                 
         if not stoploss_price:
-            if len(numbers) >= 3 and numbers[2] != entry_price and numbers[2] != target_price:
-                stoploss_price = numbers[2]
+            if len(available_numbers) >= 3 and available_numbers[2] != entry_price and available_numbers[2] != target_price:
+                stoploss_price = available_numbers[2]
             elif entry_price:
                 stoploss_price = round(entry_price * (0.95 if action == "BUY" else 1.05), 2)
 
         if not entry_price:
-            entry_price = 100.0
-            target_price = 200.0
-            stoploss_price = 80.0
+            if target_price and stoploss_price:
+                # If target and stoploss are both known, entry typically sits between them
+                entry_price = round(stoploss_price + (target_price - stoploss_price) * 0.4, 2) if action == "BUY" else round(target_price + (stoploss_price - target_price) * 0.4, 2)
+            elif target_price:
+                entry_price = round(target_price / 1.08, 2) if action == "BUY" else round(target_price / 0.92, 2)
+            elif stoploss_price:
+                entry_price = round(stoploss_price / 0.95, 2) if action == "BUY" else round(stoploss_price / 1.05, 2)
+            else:
+                entry_price = 100.0
+                target_price = 200.0
+                stoploss_price = 80.0
 
         if action == "BUY" and target_price <= entry_price:
             target_price = round(entry_price * 1.08, 2)
