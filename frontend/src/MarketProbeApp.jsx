@@ -829,10 +829,15 @@ function TipCard({ t, first }) {
                 <span><Play size={24} fill="#fff" color="#fff" style={{ marginLeft: 2 }} /></span>
               </div>
               <div className="tip-overlay">
-                <span className="tip-title">{t.video_title || `${t.action} ${t.ticker} Analysis`}</span>
-                <span className="tip-ts">
-                  <Clock size={11} /> @ {t.timestamp_str || '00:00'}
-                </span>
+                <div className="tip-title">{t.video_title || `${t.action} ${t.ticker} Analysis`}</div>
+                <div className="tip-overlay-bottom">
+                  <span className="tip-ts">
+                    <Clock size={11} /> Call @ {t.timestamp_str || '00:00'}
+                  </span>
+                  <span style={{ fontSize: 10.5, color: '#e2e8f0', background: 'rgba(0,0,0,0.6)', padding: '2px 6px', borderRadius: 4, backdropFilter: 'blur(4px)' }}>
+                    {t.creator_name}
+                  </span>
+                </div>
               </div>
             </div>
           )}
