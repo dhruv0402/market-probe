@@ -2349,12 +2349,12 @@ function WatchlistComponent() {
                     <ShieldCheck size={12} color="var(--green2)" /> Verified Tick Replay
                   </span>
                   <a
-                    href={`https://kite.zerodha.com/chart/ext/ciq/NSE/${it.symbol}`}
+                    href={`https://kite.zerodha.com/marketwatch?search=${encodeURIComponent(it.symbol)}`}
                     target="_blank"
                     rel="noreferrer"
                     className="btn btn-primary"
-                    style={{ padding: '4px 10px', fontSize: 11.5, gap: 5, textDecoration: 'none' }}
-                    title="Open on Zerodha Kite"
+                    style={{ padding: '6px 12px', fontSize: 11.5, gap: 5, textDecoration: 'none', background: '#ff5722', borderColor: '#ff5722' }}
+                    title="Open on Zerodha Kite and copy order payload"
                     onClick={() => {
                       const payload = `BUY ${it.symbol} | CMP: ₹${it.current_price || ''} | Target: ₹${it.avg_target || ''}`;
                       navigator.clipboard?.writeText(payload);
