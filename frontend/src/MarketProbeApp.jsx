@@ -868,32 +868,36 @@ function TipCard({ t, first }) {
       )}
 
       <div className="tip-body">
-        <div className="row between">
-          <div className="row">
+        <div className="row between" style={{ flexWrap: 'wrap', gap: 10, alignItems: 'flex-start' }}>
+          <div className="row" style={{ flex: '1 1 auto', minWidth: 200, gap: 10 }}>
             <div className="creator-av" style={{ background: t.is_sebi ? 'rgba(16,185,129,0.15)' : 'rgba(56,189,248,0.15)', color: t.is_sebi ? 'var(--green2)' : 'var(--blue)' }}>
               {t.creator_name ? t.creator_name[0] : 'A'}
             </div>
-            <div>
-              <div className="row" style={{ fontWeight: 800, fontSize: 14 }}>
-                {t.creator_name}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="row" style={{ flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--text)' }}>{t.creator_name}</span>
                 {t.is_sebi ? (
-                  <span className="pill pill-buy" style={{ fontSize: 10, padding: '2px 6px', gap: 4 }} title={`Verified SEBI Reg No: ${t.sebi_reg_no || 'Registered'}`}>
+                  <span className="pill pill-buy" style={{ fontSize: 10, padding: '2px 7px', gap: 4 }} title={`Verified SEBI Reg No: ${t.sebi_reg_no || 'Registered'}`}>
                     <ShieldCheck size={11} /> SEBI RA {t.sebi_reg_no ? `· ${t.sebi_reg_no}` : 'REGISTERED'}
                   </span>
                 ) : (
-                  <span className="pill pill-miss" style={{ fontSize: 10, padding: '2px 6px', gap: 4 }} title="Unregistered Social Creator - Higher Execution Risk">
+                  <span className="pill pill-miss" style={{ fontSize: 10, padding: '2px 7px', gap: 4 }} title="Unregistered Social Creator - Higher Execution Risk">
                     <AlertTriangle size={11} /> UNREGISTERED
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: 11.5, color: 'var(--dim)' }}>
+              <div style={{ fontSize: 11.5, color: 'var(--dim)', marginTop: 2 }}>
                 {t.platform} · {String(t.timestamp || '').slice(0, 10)}
               </div>
             </div>
           </div>
-          <div className="row">
-            <span className={`pill ${t.action === 'BUY' ? 'pill-buy' : 'pill-sell'}`}>{t.action} {t.ticker}</span>
-            <span className={`pill ${statusCls}`}>{t.status}</span>
+          <div className="row" style={{ flexShrink: 0, gap: 6 }}>
+            <span className={`pill ${t.action === 'BUY' ? 'pill-buy' : 'pill-sell'}`} style={{ fontSize: 12, padding: '4px 8px' }}>
+              {t.action} {t.ticker}
+            </span>
+            <span className={`pill ${statusCls}`} style={{ fontSize: 11, padding: '4px 8px' }}>
+              {t.status}
+            </span>
           </div>
         </div>
 
@@ -954,14 +958,14 @@ function TipCard({ t, first }) {
         {/* 1. Interactive Technical Candlestick Chart Drawer */}
         {showChart && (
           <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, border: '1px solid var(--line2)', marginTop: 8 }}>
-            <div className="row between" style={{ marginBottom: 8 }}>
+            <div className="row between" style={{ marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
               <span style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--dim)', textTransform: 'uppercase' }}>
-                {t.ticker} 30-Day Daily Chart with Projected Levels
+                {t.ticker} 30-Day Technical Price Action
               </span>
-              <div className="row" style={{ gap: 10, fontSize: 11 }}>
-                <span style={{ color: 'var(--green2)' }}>● Target: {inr(target)}</span>
-                <span style={{ color: 'var(--blue)' }}>● Entry: {inr(entry)}</span>
-                <span style={{ color: '#fb7185' }}>● SL: {inr(stoploss)}</span>
+              <div className="row" style={{ gap: 8, fontSize: 11, flexWrap: 'wrap' }}>
+                <span style={{ color: 'var(--green2)', fontWeight: 700 }}>● Tgt: {inr(target)}</span>
+                <span style={{ color: 'var(--blue)', fontWeight: 700 }}>● Entry: {inr(entry)}</span>
+                <span style={{ color: '#fb7185', fontWeight: 700 }}>● SL: {inr(stoploss)}</span>
               </div>
             </div>
 
@@ -1049,14 +1053,14 @@ function TipCard({ t, first }) {
         )}
 
         {/* Order Execution Bar: Direct TradingView Chart Link + Multi-Broker Order Ticket Modal */}
-        <div className="row between" style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
-          <div className="row" style={{ gap: 6 }}>
+        <div className="row between" style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line)', flexWrap: 'wrap', gap: 8 }}>
+          <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
             <a
               href={`https://www.tradingview.com/chart/?symbol=${tvSymbol}`}
               target="_blank"
               rel="noreferrer"
               className="btn btn-ghost"
-              style={{ padding: '6px 12px', fontSize: 12, gap: 5, textDecoration: 'none' }}
+              style={{ padding: '6px 10px', fontSize: 11.5, gap: 5, textDecoration: 'none' }}
               title="Open full TradingView NSE technical chart"
             >
               <ExternalLink size={12} />
@@ -1067,35 +1071,35 @@ function TipCard({ t, first }) {
                 type="button"
                 className="btn btn-ghost"
                 onClick={() => setShowTheater(true)}
-                style={{ padding: '6px 10px', fontSize: 12, gap: 4, color: '#ef4444' }}
+                style={{ padding: '6px 10px', fontSize: 11.5, gap: 4, color: '#ef4444' }}
                 title="Open Theater Mode with timestamp breakdowns"
               >
                 <Maximize2 size={11} />
-                <span>Theater Mode</span>
+                <span>Theater</span>
               </button>
             )}
           </div>
 
-          <div className="row" style={{ gap: 8 }}>
+          <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
             <button
               type="button"
               className="btn btn-ghost"
               onClick={copyKitePayload}
-              style={{ padding: '6px 12px', fontSize: 12, gap: 5 }}
+              style={{ padding: '6px 10px', fontSize: 11.5, gap: 4 }}
               title="Copy formatted trade parameters"
             >
-              <Copy size={12} />
-              <span>{copiedKite ? '✓ Copied' : 'Copy Order'}</span>
+              <Copy size={11} />
+              <span>{copiedKite ? '✓ Copied' : 'Copy'}</span>
             </button>
             <button
               type="button"
               className="btn btn-primary"
               onClick={() => setShowOrderModal(true)}
-              style={{ padding: '6px 14px', fontSize: 12.5, gap: 6 }}
+              style={{ padding: '6px 12px', fontSize: 12, gap: 5 }}
               title="Execute order across Zerodha, Groww, Upstox, or Angel One"
             >
-              <span>⚡ Execute {suggestedQty} Qty</span>
-              <ChevronDown size={13} />
+              <span>⚡ Execute ({suggestedQty} Qty)</span>
+              <ChevronDown size={12} />
             </button>
           </div>
         </div>

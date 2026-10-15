@@ -153,13 +153,19 @@ a:hover { text-decoration: underline; }
 .chip.on { color: #fff; border-color: rgba(16,185,129,.55); background: rgba(16,185,129,0.14); }
 .count { color: var(--dim); font-size: 14.5px; margin-left: auto; }
 
-/* ---------- Tip cards (3x3 / 4x4 prominent large grid) ---------- */
-.grid-feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 22px; width: 100%; }
-@media (min-width: 1900px) {
+/* ---------- Tip cards (2x2 / 3x3 prominent wide cards with ample breathing room) ---------- */
+.grid-feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); gap: 24px; width: 100%; }
+@media (min-width: 2200px) {
   .grid-feed { grid-template-columns: repeat(4, 1fr); }
 }
-@media (min-width: 1400px) and (max-width: 1899px) {
+@media (min-width: 1600px) and (max-width: 2199px) {
   .grid-feed { grid-template-columns: repeat(3, 1fr); }
+}
+@media (min-width: 1050px) and (max-width: 1599px) {
+  .grid-feed { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 1049px) {
+  .grid-feed { grid-template-columns: 1fr; }
 }
 .tip { overflow: hidden; display: flex; flex-direction: column; transition: border-color .15s, box-shadow .15s, transform .15s; border-radius: 15px; }
 .tip:hover { border-color: var(--line2); box-shadow: 0 16px 36px -12px rgba(0,0,0,.8); transform: translateY(-2px); }
