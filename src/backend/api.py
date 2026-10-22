@@ -24,7 +24,7 @@ import pickle
 import numpy as np
 import pandas as pd
 import yfinance as yf
-from datetime import datetime
+from datetime import datetime, timezone
 import threading
 import time
 import re
@@ -1655,7 +1655,7 @@ def export_sebi_compliance_audit(format: str = Query("json", pattern="^(json|csv
 
     return {
         "report_title": "MarketProbe SEBI Financial Recommendation Compliance Audit",
-        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "total_audited_records": len(rows),
         "regulatory_disclaimer": "This audit trail is compiled from empirical social and broker transcripts evaluated against real-time NSE tick data. It provides quantitative performance verification for compliance review.",
         "records": [dict(r) for r in rows]
@@ -1703,7 +1703,7 @@ def get_pipeline_status():
         "latest_recommendation_timestamp": latest_row[0] if latest_row else None,
         "live_quote_engine": "ACTIVE",
         "quotes_cached": len(LIVE_QUOTES_CACHE),
-        "server_time_utc": datetime.utcnow().isoformat() + "Z"
+        "server_time_utc": datetime.now(timezone.utc).isoformat()
     }
 
 @app.get("/api/stock-candles")
@@ -1863,7 +1863,7 @@ def get_evaluation_metrics():
             
     # Fallback to in-memory defaults if file is being regenerated
     return {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "geval_framework": {
             "composite_score_out_of_5": 4.92,
             "composite_percentage": 98.4,
