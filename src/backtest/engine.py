@@ -81,7 +81,25 @@ def run_backtest_engine():
                 if cur_gain > peak_return:
                     peak_return = cur_gain
                     
-                if low <= stoploss_p:
+                # Deterministic collision check: did both target and stop loss trigger on the same bar?
+                both_triggered = (low <= stoploss_p) and (high >= target_p)
+                if both_triggered:
+                    # Intraday order collision disambiguation:
+                    # If open was closer to stop loss or gap down occurred, stop loss hit first.
+                    # As a conservative risk management standard, penalize simultaneous breaches as MISS.
+                    bar_open = float(bar['Open']) if 'Open' in bar else entry_p
+                    dist_to_sl = abs(bar_open - stoploss_p)
+                    dist_to_tgt = abs(bar_open - target_p)
+                    if dist_to_sl <= dist_to_tgt:
+                        status = 'MISS'
+                        exit_price = stoploss_p
+                    else:
+                        # Even if closer to target, enforce conservative stop-loss precedence
+                        status = 'MISS'
+                        exit_price = stoploss_p
+                    holding_bars = df.index.get_loc(idx) + 1
+                    break
+                elif low <= stoploss_p:
                     status = 'MISS'
                     exit_price = stoploss_p
                     holding_bars = df.index.get_loc(idx) + 1
@@ -100,7 +118,14 @@ def run_backtest_engine():
                 if cur_gain > peak_return:
                     peak_return = cur_gain
                     
-                if high >= stoploss_p:
+                # Short direction collision check
+                both_triggered = (high >= stoploss_p) and (low <= target_p)
+                if both_triggered:
+                    status = 'MISS'
+                    exit_price = stoploss_p
+                    holding_bars = df.index.get_loc(idx) + 1
+                    break
+                elif high >= stoploss_p:
                     status = 'MISS'
                     exit_price = stoploss_p
                     holding_bars = df.index.get_loc(idx) + 1
