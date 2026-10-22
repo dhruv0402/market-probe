@@ -1,24 +1,24 @@
 {
-  "evaluation_timestamp": "2026-10-13T23:33:15.407433",
+  "evaluation_timestamp": "2026-10-21T14:17:02.280095",
   "nlp_extraction_evaluation": {
     "sample_size": 500,
-    "ticker_recognition_accuracy": 100.0,
-    "tuple_exact_match_accuracy": 98.6,
-    "mean_entry_price_relative_error": 149.2,
-    "mean_target_price_relative_error": 169.25,
+    "ticker_recognition_accuracy": 99.8,
+    "tuple_exact_match_accuracy": 99.8,
+    "mean_entry_price_relative_error": 671.73,
+    "mean_target_price_relative_error": 1327.63,
     "action_direction_kappa": {
-      "kappa": 0.2194,
-      "observed_agreement_Po": 0.986,
-      "expected_agreement_Pe": 0.9821,
-      "interpretation": "Fair Agreement",
+      "kappa": 1.0,
+      "observed_agreement_Po": 1.0,
+      "expected_agreement_Pe": 0.996,
+      "interpretation": "Almost Perfect Agreement",
       "confusion_matrix": [
         [
           1,
-          7
+          0
         ],
         [
           0,
-          492
+          499
         ]
       ]
     }
@@ -34,9 +34,9 @@
         "description": "Accuracy of extracted ticker, price levels and action against raw post"
       },
       "mathematical_realism": {
-        "score": 4.8,
+        "score": 4.7,
         "scale_max": 5.0,
-        "percentage": 95.9,
+        "percentage": 94.0,
         "description": "Risk-to-reward viability and adherence to NSE circuit bounds"
       },
       "system_actionability": {
@@ -46,53 +46,53 @@
         "description": "Tuple completeness for automated 1-click broker order dispatch"
       },
       "regulatory_clarity": {
-        "score": 4.8,
+        "score": 4.37,
         "scale_max": 5.0,
-        "percentage": 96.1,
+        "percentage": 87.3,
         "description": "SEBI registration alignment, stop-loss protection, and absence of deceptive marketing"
       }
     },
-    "composite_geval_score": 4.92,
-    "composite_percentage": 98.4,
+    "composite_geval_score": 4.83,
+    "composite_percentage": 96.6,
     "verdict": "Production-Grade High Precision"
   },
   "model_outcome_evaluation": {
     "dataset_scope": {
-      "total_evaluated_outcomes": 843,
-      "holdout_test_sample": 211,
-      "baseline_natural_winrate": 40.45
+      "total_evaluated_outcomes": 2098,
+      "holdout_test_sample": 525,
+      "baseline_natural_winrate": 47.86
     },
     "model_performance_holdout": {
-      "accuracy": 64.45,
-      "precision": 57.35,
-      "recall": 45.88,
-      "f1_score": 50.98,
-      "roc_auc": 0.6962,
-      "brier_score": 0.2145,
+      "accuracy": 56.95,
+      "precision": 54.94,
+      "recall": 55.38,
+      "f1_score": 55.16,
+      "roc_auc": 0.6034,
+      "brier_score": 0.2453,
       "brier_calibration_status": "Well-Calibrated (<0.25)"
     },
     "cohen_kappa_outcome_prediction": {
-      "kappa": 0.2364,
-      "observed_agreement_Po": 0.6445,
-      "expected_agreement_Pe": 0.5345,
-      "interpretation": "Fair Agreement",
+      "kappa": 0.1377,
+      "observed_agreement_Po": 0.5695,
+      "expected_agreement_Pe": 0.5008,
+      "interpretation": "Slight Agreement",
       "confusion_matrix": [
         [
-          97,
-          29
+          160,
+          114
         ],
         [
-          46,
-          39
+          112,
+          139
         ]
       ]
     },
     "conviction_gating_impact": {
       "gated_threshold": ">= 60.0% AI Conviction",
-      "gated_subsample_size": 44,
-      "unfiltered_baseline_winrate": "40.3%",
-      "filtered_gated_winrate": "68.2%",
-      "alpha_winrate_lift": "+27.9% improvement"
+      "gated_subsample_size": 93,
+      "unfiltered_baseline_winrate": "47.8%",
+      "filtered_gated_winrate": "63.4%",
+      "alpha_winrate_lift": "+15.6% improvement"
     }
   }
 }

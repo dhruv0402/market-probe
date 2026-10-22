@@ -173,6 +173,19 @@ class PrecisionFinancialNER:
         if len(text_clean) < 4:
             return None
 
+        # Detect Instrument Type & Option Strikes
+        is_option = bool(re.search(r'\b(\d{4,6})\s*(CE|PE|CALL|PUT)\b', text_clean, re.IGNORECASE))
+        is_future = bool(re.search(r'\b(FUT|FUTURE|FUTURES)\b', text_clean, re.IGNORECASE))
+        instrument_type = "OPTION" if is_option else ("FUTURE" if is_future else "EQUITY")
+
+        opt_match = re.search(r'\b(\d{4,6})\s*(CE|PE|CALL|PUT)\b', text_clean, re.IGNORECASE)
+        option_strike = float(opt_match.group(1)) if opt_match else None
+        option_type = opt_match.group(2).upper() if opt_match else None
+        if option_type in ["CALL", "CE"]:
+            option_type = "CE"
+        elif option_type in ["PUT", "PE"]:
+            option_type = "PE"
+
         has_sell = bool(re.search(r'\b(SELL|BECHO|SHORT|BECH|PUT|PE)\b', text_clean, re.IGNORECASE))
         has_buy = bool(re.search(r'\b(BUY|KHAREEDO|ACCUMULATE|LONG|KHARID|CALL|CE)\b', text_clean, re.IGNORECASE))
         action = "SELL" if (has_sell and not has_buy) else "BUY"
@@ -261,7 +274,7 @@ class PrecisionFinancialNER:
             except: pass
 
         numbers = [float(n) for n in re.findall(r'\b\d{1,6}(?:\.\d{1,2})?\b', text_clean) if 1.0 <= float(n) <= 150000.0]
-        used_numbers = {x for x in [target_price, stoploss_price] if x is not None}
+        used_numbers = {x for x in [target_price, stoploss_price, option_strike] if x is not None}
         available_numbers = [n for n in numbers if n not in used_numbers]
         
         if matched_ticker in ['^NSEI', 'NIFTY'] and not entry_price:
@@ -301,6 +314,11 @@ class PrecisionFinancialNER:
                 target_price = 200.0
                 stoploss_price = 80.0
 
+        if not target_price:
+            target_price = round(entry_price * (1.08 if action == "BUY" else 0.92), 2)
+        if not stoploss_price:
+            stoploss_price = round(entry_price * (0.95 if action == "BUY" else 1.05), 2)
+
         if action == "BUY" and target_price <= entry_price:
             target_price = round(entry_price * 1.08, 2)
         if action == "BUY" and stoploss_price >= entry_price:
@@ -317,6 +335,9 @@ class PrecisionFinancialNER:
             "ticker": ticker_formatted,
             "company_name": matched_company,
             "action": action,
+            "instrument_type": instrument_type,
+            "option_strike": option_strike,
+            "option_type": option_type,
             "entry_price": round(entry_price, 2),
             "target_price": round(target_price, 2),
             "stoploss_price": round(stoploss_price, 2),
