@@ -60,9 +60,12 @@ app = FastAPI(
     version="4.0.0"
 )
 
+cors_origins_env = os.environ.get("CORS_ORIGINS", "*")
+allowed_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins if allowed_origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -88,13 +91,28 @@ if os.path.exists(MODEL_PATH):
         print("Model loading notice:", e)
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH, timeout=20.0, check_same_thread=False)
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url and (database_url.startswith("postgres://") or database_url.startswith("postgresql://")):
+        try:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+            # Standardize URL scheme for psycopg2
+            if database_url.startswith("postgres://"):
+                database_url = database_url.replace("postgres://", "postgresql://", 1)
+            conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
+            conn.autocommit = True
+            return conn
+        except Exception as pg_err:
+            print(f"[DB_CONNECT] PostgreSQL connection attempt failed ({pg_err}), falling back to optimized SQLite.")
+
+    conn = sqlite3.connect(DB_PATH, timeout=30.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     try:
         conn.execute("PRAGMA journal_mode = WAL;")
         conn.execute("PRAGMA synchronous = NORMAL;")
         conn.execute("PRAGMA cache_size = -64000;") # 64MB memory cache
         conn.execute("PRAGMA temp_store = MEMORY;")
+        conn.execute("PRAGMA busy_timeout = 30000;") # 30s retry window
     except Exception:
         pass
     return conn
@@ -227,14 +245,41 @@ def sync_live_market_data():
 
 sync_live_market_data()
 
-# Background Daemon for Live Quotes
+# Background Daemon for Live Quotes, Periodic Ingestion & Chronological Outcome Backtesting
 def background_quote_worker():
+    last_backtest_check = 0
+    last_daily_ingestion_date = None
+
     while True:
         try:
             time.sleep(15)
             sync_live_market_data()
-        except Exception:
-            pass
+
+            now_ts = time.time()
+            now_dt = datetime.now()
+            today_str = now_dt.strftime("%Y-%m-%d")
+
+            # 1. Periodic Chronological Backtest (every 10 minutes)
+            if now_ts - last_backtest_check > 600:
+                last_backtest_check = now_ts
+                try:
+                    from src.backtest.engine import run_backtest_engine
+                    run_backtest_engine()
+                except Exception as b_err:
+                    print(f"[SUPERVISOR] Outcome backtest notice: {b_err}")
+
+            # 2. Automated Daily Market Ingestion Supervisor
+            # Triggers after market close (15:45 IST) once per trading day
+            if now_dt.hour >= 15 and now_dt.minute >= 45 and last_daily_ingestion_date != today_str:
+                last_daily_ingestion_date = today_str
+                try:
+                    print(f"[SUPERVISOR] Executing scheduled post-market ingestion pipeline for {today_str}...")
+                    run_daily_ingestion_job()
+                except Exception as ing_err:
+                    print(f"[SUPERVISOR] Daily ingestion notice: {ing_err}")
+
+        except Exception as err:
+            time.sleep(10)
 
 threading.Thread(target=background_quote_worker, daemon=True).start()
 
@@ -647,8 +692,14 @@ def create_checkout_order(req: CreateOrderRequest, user: dict = Depends(require_
     order_id = f"order_{req.gateway}_{int(time.time())}_{abs(hash(user['email'])) % 10000}"
     amount = plan["inr_price"] if req.currency == "INR" else plan["usd_price"]
 
-    # In production, this calls razorpay.Client.order.create() or stripe.checkout.Session.create()
-    # Hybrid fallback: Generates authentic signed order object compatible with standard Razorpay Checkout & Stripe Elements
+    # Dynamic Key Resolution based on gateway environment variables
+    if req.gateway == "razorpay":
+        key_id = os.environ.get("RAZORPAY_KEY_ID", "rzp_test_marketprobe")
+    elif req.gateway == "stripe":
+        key_id = os.environ.get("STRIPE_PUBLISHABLE_KEY", "pk_test_marketprobe")
+    else:
+        key_id = "upi_direct_marketprobe"
+
     return {
         "status": "success",
         "gateway": req.gateway,
@@ -656,7 +707,7 @@ def create_checkout_order(req: CreateOrderRequest, user: dict = Depends(require_
         "tier": req.tier.lower(),
         "amount": amount,
         "currency": req.currency,
-        "key_id": "rzp_live_marketprobe" if req.gateway == "razorpay" else "pk_live_marketprobe",
+        "key_id": key_id,
         "user": {
             "name": user.get("name", "Trader"),
             "email": user["email"]
@@ -665,7 +716,26 @@ def create_checkout_order(req: CreateOrderRequest, user: dict = Depends(require_
 
 @app.post("/api/billing/verify-payment")
 def verify_payment(req: VerifyPaymentRequest, user: dict = Depends(require_auth)):
-    # Persist the confirmed transaction and auto-upgrade user tier
+    # 1. Cryptographic Signature Verification (Razorpay / Stripe)
+    razorpay_secret = os.environ.get("RAZORPAY_KEY_SECRET")
+    stripe_secret = os.environ.get("STRIPE_WEBHOOK_SECRET")
+
+    if req.gateway == "razorpay" and razorpay_secret:
+        if not req.signature:
+            raise HTTPException(status_code=400, detail="Missing required Razorpay signature.")
+        msg = f"{req.order_id}|{req.payment_id}".encode("utf-8")
+        expected_sig = hmac.new(razorpay_secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected_sig, req.signature):
+            raise HTTPException(status_code=400, detail="Invalid Razorpay payment signature.")
+    elif req.gateway == "stripe" and stripe_secret:
+        if not req.signature:
+            raise HTTPException(status_code=400, detail="Missing required Stripe payment signature.")
+        # Stripe signature verification
+        expected_sig = hmac.new(stripe_secret.encode("utf-8"), req.payment_id.encode("utf-8"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected_sig, req.signature):
+            raise HTTPException(status_code=400, detail="Invalid Stripe payment signature.")
+
+    # 2. Persist the confirmed transaction and auto-upgrade user tier
     res = record_subscription(
         user_id=user["id"],
         gateway=req.gateway,

@@ -34,9 +34,20 @@ def log(msg):
     with open(LOG_PATH, "a") as f:
         f.write(line + "\n")
 
+def get_requests_session():
+    s = requests.Session()
+    proxy = os.environ.get("PROXY_URL") or os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
+    if proxy:
+        s.proxies = {"http": proxy, "https": proxy}
+    s.headers.update({
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    })
+    return s
+
 def run_turbo_loop():
     log("🔥 TURBO INGESTION & TRAINING ENGINE STARTED (Target: Max Scale by 7:00 AM IST)")
-    api = YouTubeTranscriptApi()
+    proxy = os.environ.get("PROXY_URL") or os.environ.get("HTTPS_PROXY")
+    proxies = {"http": proxy, "https": proxy} if proxy else None
     
     # 50 High-Volume Search Themes to scrape maximum recommendations
     search_themes = [
@@ -64,13 +75,22 @@ def run_turbo_loop():
             conn = sqlite3.connect(DB_PATH)
             cur = conn.cursor()
             
-            # 1. Ingest from Search Themes
+            # 1. Ingest from Search Themes with Exponential Backoff
             for theme in search_themes:
                 log(f"Searching Theme: {theme}...")
+                backoff_delay = 2.0
                 try:
                     url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(theme)}"
-                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                    html = urllib.request.urlopen(req, timeout=10).read().decode('utf-8')
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'})
+                    
+                    try:
+                        html = urllib.request.urlopen(req, timeout=12).read().decode('utf-8')
+                    except urllib.error.HTTPError as http_err:
+                        if http_err.code in [429, 403]:
+                            log(f"⚠️ Rate limited (HTTP {http_err.code}) on theme '{theme}'. Backing off {backoff_delay * 2:.1f}s...")
+                            time.sleep(backoff_delay * 2)
+                        continue
+
                     vids = list(set(re.findall(r'watch\?v=([a-zA-Z0-9_-]{11})', html)))
                     
                     for vid in vids[:10]:
@@ -94,11 +114,14 @@ def run_turbo_loop():
                             ''', (1, 'youtube', vid, f"Market Analysis {vid}", text, 1 if has_sponsor else 0, ', '.join(found_terms), f"https://youtube.com/watch?v={vid}"))
                             conn.commit()
                             log(f"  ✅ Ingested Transcript: {vid} ({len(text.split())} words)")
-                        except Exception:
-                            pass
-                    time.sleep(1)
+                            time.sleep(1.5) # Anti-ban rate pacing
+                        except Exception as t_err:
+                            # Transient transcript fetch issue
+                            time.sleep(0.5)
+                    time.sleep(2.0)
                 except Exception as e:
-                    log(f"Search error: {e}")
+                    log(f"Search error on {theme}: {e}")
+                    time.sleep(3.0)
 
             # 2. Extract structured recommendations
             log("Running Batch NLP Extractor...")
@@ -172,22 +195,43 @@ def run_turbo_loop():
                     t_val = tgt_p if tgt_p else base_e * 1.05
                     sl_val = sl_p if sl_p else base_e * 0.95
                     
+                    # Chronological day-by-day path evaluation
                     status = 'OPEN'
                     ret = ((curr_c - base_e) / base_e) * 100 if action == 'BUY' else ((base_e - curr_c) / base_e) * 100
-                    if action == 'BUY':
-                        if peak_h >= t_val:
-                            status = 'HIT'
-                            ret = ((t_val - base_e) / base_e) * 100
-                        elif tr_l <= sl_val:
-                            status = 'MISS'
-                            ret = ((sl_val - base_e) / base_e) * 100
-                    else:
-                        if tr_l <= t_val:
-                            status = 'HIT'
-                            ret = ((base_e - t_val) / base_e) * 100
-                        elif peak_h >= sl_val:
-                            status = 'MISS'
-                            ret = ((base_e - sl_val) / base_e) * 100
+                    exit_price = curr_c
+                    days_taken = len(df)
+
+                    for day_idx, (_, row) in enumerate(df.iterrows()):
+                        bar_high = float(row['High'].item() if hasattr(row['High'], 'item') else row['High'])
+                        bar_low = float(row['Low'].item() if hasattr(row['Low'], 'item') else row['Low'])
+
+                        if action == 'BUY':
+                            # Stop loss breach takes priority if both are hit on same day, or check sequence
+                            if bar_low <= sl_val:
+                                status = 'MISS'
+                                exit_price = sl_val
+                                ret = ((sl_val - base_e) / base_e) * 100
+                                days_taken = day_idx + 1
+                                break
+                            elif bar_high >= t_val:
+                                status = 'HIT'
+                                exit_price = t_val
+                                ret = ((t_val - base_e) / base_e) * 100
+                                days_taken = day_idx + 1
+                                break
+                        else: # SELL
+                            if bar_high >= sl_val:
+                                status = 'MISS'
+                                exit_price = sl_val
+                                ret = ((base_e - sl_val) / base_e) * 100
+                                days_taken = day_idx + 1
+                                break
+                            elif bar_low <= t_val:
+                                status = 'HIT'
+                                exit_price = t_val
+                                ret = ((base_e - t_val) / base_e) * 100
+                                days_taken = day_idx + 1
+                                break
                     cur.execute('''
                         UPDATE recommendations 
                         SET entry_price = ?, target_price = ?, stoploss_price = ?, 

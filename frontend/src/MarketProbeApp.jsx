@@ -5,13 +5,14 @@ import {
   ExternalLink, Zap, Database, TrendingUp, TrendingDown, 
   Layers, ChevronRight, BarChart3, AlertTriangle, Sparkles,
   Bell, Download, ArrowRight, Lock, Key, Users, Check, X, Shield, Globe,
-  Sun, Moon, Palette, Bookmark, CreditCard, Star, Maximize2, Clock, Copy, ChevronDown
+  Sun, Moon, Palette, Bookmark, CreditCard, Star, Maximize2, Clock, Copy, ChevronDown,
+  Share2
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import Tour from './Tour.jsx';
 import './mp.css';
 
-const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || '8081';
+const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || '8080';
 const API = import.meta.env.VITE_API_URL || (
   typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
     ? `${window.location.origin}/api`
@@ -1777,7 +1778,23 @@ function Rankings() {
   const [rows, setRows] = useState(null);
   const [filterMode, setFilterMode] = useState('ALL'); // 'ALL', 'SEBI_ONLY', 'HALL_OF_SHAME'
   const [err, setErr] = useState('');
-  useEffect(() => { api('/leaderboard').then((d) => setRows(d.leaderboard || [])).catch((e) => setErr(e.message)); }, []);
+  useEffect(() => {
+    api('/leaderboard')
+      .then((d) => {
+        if (d && Array.isArray(d.leaderboard) && d.leaderboard.length > 0) {
+          setRows(d.leaderboard);
+        } else {
+          // Fallback to /influencers endpoint
+          return api('/influencers').then(alt => setRows((alt && alt.leaderboard) || []));
+        }
+      })
+      .catch((e) => {
+        // Retry alternative endpoint before giving up
+        api('/influencers')
+          .then(alt => setRows((alt && alt.leaderboard) || []))
+          .catch(err2 => setErr(e.message || err2.message || 'Failed to load rankings'));
+      });
+  }, []);
   
   const filteredRows = useMemo(() => {
     if (!rows) return [];
