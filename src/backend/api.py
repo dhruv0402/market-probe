@@ -16,6 +16,8 @@ import os
 import sqlite3
 import asyncio
 import io
+import hmac
+import hashlib
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
