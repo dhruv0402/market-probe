@@ -2,6 +2,9 @@
 import os
 import sys
 
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+os.environ["OMP_NUM_THREADS"] = "1"
+
 def _get_project_root():
     curr = os.path.dirname(os.path.abspath(__file__))
     while curr != "/" and curr != os.path.dirname(curr):

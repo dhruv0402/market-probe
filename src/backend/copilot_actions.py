@@ -98,57 +98,13 @@ def execute_copilot_tool_cycle(message: str, user_id: Optional[int] = None) -> D
             "source_node": "marketprobe-db-engine"
         }
 
-    # 3. Tool: Tip Audit
+    # 3. Tool: Deep Quantitative Tip & Setup Audit with CoT & SHAP Attribution
     if any(w in msg_low for w in ["buy", "sell", "tgt", "target", "stoploss", "sl", "breakout"]):
-        from src.nlp.precision_extractor import PrecisionFinancialNER
-        ner = PrecisionFinancialNER()
-        extracted = ner.extract_recommendation(message)
-        if extracted and extracted.get("ticker"):
-            ticker = extracted["ticker"]
-            entry = extracted["entry_price"]
-            tgt = extracted["target_price"]
-            sl = extracted["stoploss_price"]
-            rr = extracted["risk_reward_ratio"]
-
-            # Query historical creator performance for this ticker if available
-            cur.execute("""
-                SELECT COUNT(*) as calls,
-                       SUM(CASE WHEN outcome_status = 'HIT' THEN 1 ELSE 0 END) as hits
-                FROM recommendations
-                WHERE ticker = ? OR ticker LIKE ?
-            """, (ticker, f"{ticker}%"))
-            row = cur.fetchone()
-            hist_calls = row["calls"] if row else 0
-            hist_hits = row["hits"] if row else 0
-            hist_wr = round(hist_hits / hist_calls * 100, 1) if hist_calls > 0 else 50.0
-
-            action_chips.append({
-                "type": "NAVIGATE_TAB",
-                "label": f"View {ticker} on Market Radar",
-                "tab": "STOCKS",
-                "ticker": ticker
-            })
-            action_chips.append({
-                "type": "NAVIGATE_TAB",
-                "label": "Simulate P&L Impact",
-                "tab": "SIMULATOR"
-            })
-
-            verdict = "APPROVED (High Alpha Conviction)" if rr >= 1.5 else "CAUTION (Tight R:R)"
-            reply = (
-                f"### MarketProbe XGBoost Trade Audit\n"
-                f"- **Ticker**: `{ticker}` ({extracted.get('action', 'BUY')})\n"
-                f"- **Entry**: ₹{entry} | **Target**: ₹{tgt} | **Stoploss**: ₹{sl}\n"
-                f"- **Risk-to-Reward Ratio**: **{rr}:1** ({verdict})\n"
-                f"- **Historical MarketProbe Base**: {hist_calls} logged calls for this stock ({hist_wr}% empirical target hit rate).\n\n"
-                f"> **SEBI Advisory**: Always verify if the recommending creator holds an active NISM/SEBI Research Analyst registration."
-            )
-            return {
-                "reply": reply,
-                "tool_executed": "audit_trade_setup",
-                "action_chips": action_chips,
-                "source_node": "marketprobe-ner-xgboost"
-            }
+        from src.backend.deep_quant_copilot import get_deep_quant_copilot
+        engine = get_deep_quant_copilot()
+        audit_res = engine.deep_audit_trade(message)
+        if audit_res:
+            return audit_res
 
     conn.close()
     return None
