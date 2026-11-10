@@ -1,15 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Bot, Send, X, Sparkles, RefreshCw, Maximize2, Minimize2, 
-  ChevronRight, Terminal, Shield, ArrowUpRight, Zap, Layers 
+  ChevronRight, Terminal, Shield, ArrowUpRight, Zap, Layers,
+  ExternalLink, Bookmark, Calculator, Activity
 } from 'lucide-react';
 
-export default function FinBotDrawer({ isOpen, onClose }) {
+export default function FinBotDrawer({ isOpen, onClose, onNavigateTab }) {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
       text: 'MarketProbe Copilot (FinBot Quant Engine) active. Ask any question regarding stock tip audits, influencer credibility, MPT portfolio weights, or Indian Section 112A tax harvesting.',
-      node: 'gemini-3.5-flash-router'
+      node: 'gemini-3.5-flash-router',
+      action_chips: [
+        { type: 'NAVIGATE_TAB', label: 'Explore Live Feed', tab: 'FEED' },
+        { type: 'NAVIGATE_TAB', label: 'Open P&L Simulator', tab: 'SIMULATOR' },
+        { type: 'NAVIGATE_TAB', label: 'View Model Rigor', tab: 'EVAL' }
+      ]
     }
   ]);
   const [input, setInput] = useState('');
@@ -24,6 +30,14 @@ export default function FinBotDrawer({ isOpen, onClose }) {
   }, [messages, isOpen]);
 
   if (!isOpen) return null;
+
+  const handleActionChipClick = (chip) => {
+    if (chip.type === 'NAVIGATE_TAB' && onNavigateTab) {
+      onNavigateTab(chip.tab);
+    } else if (chip.type === 'OPTIMIZE_PORTFOLIO') {
+      setInput(`Optimize MPT weights for ${chip.tickers.join(', ')} with 6.5% risk-free rate`);
+    }
+  };
 
   const handleSend = async (e) => {
     e?.preventDefault();
@@ -48,7 +62,8 @@ export default function FinBotDrawer({ isOpen, onClose }) {
         {
           role: 'assistant',
           text: data.reply || data.response || (typeof data === 'string' ? data : JSON.stringify(data)),
-          node: data.source_node || data.model || 'multi-node-orchestrator'
+          node: data.source_node || data.model || 'multi-node-orchestrator',
+          action_chips: data.action_chips || []
         }
       ]);
     } catch (err) {
@@ -71,7 +86,7 @@ export default function FinBotDrawer({ isOpen, onClose }) {
       top: 0,
       right: 0,
       bottom: 0,
-      width: expanded ? '85vw' : '480px',
+      width: expanded ? '85vw' : '490px',
       maxWidth: '100vw',
       background: '#070a11',
       borderLeft: '1px solid #1a2333',
@@ -110,7 +125,7 @@ export default function FinBotDrawer({ isOpen, onClose }) {
               <span style={{ fontSize: '13px', fontWeight: 700, color: '#f8fafc', letterSpacing: '0.02em' }}>FINBOT COPILOT</span>
               <span style={{ fontSize: '9px', background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', padding: '1px 5px', borderRadius: '2px', fontWeight: 600 }}>LIVE</span>
             </div>
-            <div style={{ fontSize: '10px', color: '#64748b' }}>CMD+K • Multi-Node Router • XGBoost Audit</div>
+            <div style={{ fontSize: '10px', color: '#64748b' }}>CMD+K • Autonomous Actions • 2,448 Calls</div>
           </div>
         </div>
 
@@ -160,6 +175,34 @@ export default function FinBotDrawer({ isOpen, onClose }) {
                 </div>
               )}
               {m.text}
+
+              {/* Phase 4: Action Chips */}
+              {m.action_chips && m.action_chips.length > 0 && (
+                <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {m.action_chips.map((chip, cIdx) => (
+                    <button
+                      key={cIdx}
+                      onClick={() => handleActionChipClick(chip)}
+                      style={{
+                        background: 'rgba(56, 189, 248, 0.1)',
+                        border: '1px solid rgba(56, 189, 248, 0.35)',
+                        color: '#38bdf8',
+                        padding: '4px 8px',
+                        borderRadius: '3px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      <ArrowUpRight size={11} /> {chip.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             {m.node && (
               <div style={{ fontSize: '9px', color: '#64748b', marginTop: '4px', fontFamily: 'monospace' }}>
@@ -170,7 +213,7 @@ export default function FinBotDrawer({ isOpen, onClose }) {
         ))}
         {loading && (
           <div style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '8px', color: '#38bdf8', fontSize: '11px', padding: '8px' }}>
-            <RefreshCw size={13} className="spin" /> Orchestrating financial intelligence...
+            <RefreshCw size={13} className="spin" /> Executing autonomous quant cycle...
           </div>
         )}
         <div ref={messagesEndRef} />
@@ -186,10 +229,11 @@ export default function FinBotDrawer({ isOpen, onClose }) {
         overflowX: 'auto'
       }}>
         {[
-          'Audit trade: BUY TATAMOTORS @ 980 TGT 1050 SL 940',
+          'Audit BUY TATAMOTORS @ 980 TGT 1050 SL 940',
+          'Who are the top influencers?',
+          'Add RELIANCE to my watchlist',
           'Optimize MPT for RELIANCE, TCS, INFY with 6.5% risk-free rate',
-          'Calculate tax harvesting for ₹1.2L capital gains under Sec 112A',
-          'roadmap to become a financial analhyst like you'
+          'Calculate tax harvesting for ₹1.2L capital gains under Sec 112A'
         ].map((prompt, i) => (
           <button
             key={i}
