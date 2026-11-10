@@ -11,6 +11,7 @@ import {
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import Tour from './Tour.jsx';
 import FinBotDesk from './FinBotDesk.jsx';
+import FinBotDrawer from './FinBotDrawer.jsx';
 import AIEvalHarnessView from './AIEvalHarnessView.jsx';
 import './mp.css';
 
@@ -2816,6 +2817,22 @@ export default function MarketProbeApp() {
   const [welcome, setWelcome] = useState(false);
   const [feed, setFeed] = useState(null);
   const [feedErr, setFeedErr] = useState('');
+  const [copilotOpen, setCopilotOpen] = useState(false);
+
+  // Global Cmd+K / Ctrl+K / Ctrl+J hotkey listener to toggle FinBot Copilot
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K' || e.key === 'j' || e.key === 'J')) {
+        e.preventDefault();
+        setCopilotOpen((prev) => !prev);
+      }
+      if (e.key === 'Escape' && copilotOpen) {
+        setCopilotOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [copilotOpen]);
 
   const [authModal, setAuthModal] = useState({ open: false, mode: 'login' });
 
@@ -2953,6 +2970,28 @@ export default function MarketProbeApp() {
         {/* Real-time Sub-Second NSE Status Indicator */}
         <TerminalStatusIndicator />
 
+        {/* Global FinBot Copilot Launcher */}
+        <button 
+          className="btn" 
+          onClick={() => setCopilotOpen(true)}
+          title="Open FinBot AI Copilot (Cmd+K)"
+          style={{
+            background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(14, 165, 233, 0.25) 100%)',
+            border: '1px solid rgba(56, 189, 248, 0.4)',
+            color: '#38bdf8',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '12px',
+            fontWeight: 600,
+            cursor: 'pointer'
+          }}
+        >
+          <Sparkles size={14} />
+          <span>Copilot</span>
+          <kbd style={{ fontSize: '10px', background: 'rgba(0, 0, 0, 0.3)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '3px', padding: '1px 5px', color: '#94a3b8' }}>⌘K</kbd>
+        </button>
+
         <button className="btn btn-blue" data-tour="tour-btn" onClick={startTour}>
           <PlayCircle size={15} /> Product Tour
         </button>
@@ -2984,6 +3023,9 @@ export default function MarketProbeApp() {
         {tab === 'BILLING' && <BillingComponent user={user} onUserUpdate={(u) => setUser(u)} />}
         {tab === 'HOW' && <How startTour={startTour} />}
       </main>
+
+      {/* Global Slide-Out Floating FinBot Copilot Drawer */}
+      <FinBotDrawer isOpen={copilotOpen} onClose={() => setCopilotOpen(false)} />
 
       {welcome && (
         <div className="modal-bg">
