@@ -12,6 +12,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import Tour from './Tour.jsx';
 import FinBotDesk from './FinBotDesk.jsx';
 import FinBotDrawer from './FinBotDrawer.jsx';
+import AIHedgeFundTerminal from './AIHedgeFundTerminal.jsx';
 import AIEvalHarnessView from './AIEvalHarnessView.jsx';
 import './mp.css';
 
@@ -38,12 +39,13 @@ const inr = (n) => (n == null ? '—' : '₹' + fmt(n));
 
 const TABS = [
   { id: 'FEED', label: 'Feed', icon: Rss },
+  { id: 'TERMINAL', label: 'AI Quant Desk (Terminal)', icon: Terminal },
+  { id: 'FINBOT', label: 'FinBot Knowledge Hub', icon: Sparkles },
   { id: 'WATCHLIST', label: 'My Watchlist', icon: Bookmark },
   { id: 'STOCKS', label: 'Stocks & Sectors', icon: Layers },
   { id: 'ALERTS', label: 'Alpha Alerts', icon: Bell },
   { id: 'RANKINGS', label: 'Rankings', icon: Trophy },
   { id: 'SIMULATOR', label: 'P&L Simulator', icon: Calculator },
-  { id: 'FINBOT', label: 'FinBot Advisor', icon: Sparkles },
   { id: 'EVAL', label: 'AI Evaluation', icon: ShieldCheck },
   { id: 'CHECKER', label: 'Fact-Check', icon: CheckCircle2 },
   { id: 'DATASET', label: 'Dataset', icon: Database },
@@ -3011,6 +3013,7 @@ export default function MarketProbeApp() {
 
       <main className="mp-main">
         {tab === 'FEED' && <Feed data={feed} loading={!feed && !feedErr} error={feedErr} />}
+        {tab === 'TERMINAL' && <AIHedgeFundTerminal />}
         {tab === 'WATCHLIST' && <WatchlistComponent />}
         {tab === 'ALERTS' && <AlphaAlerts />}
         {tab === 'STOCKS' && <StocksRadar />}
