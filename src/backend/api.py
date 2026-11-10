@@ -1902,6 +1902,77 @@ def get_evaluation_metrics():
     }
 
 # -------------------------------------------------------------------------
+# FinBot AI Quantitative & Portfolio Orchestration Bridge
+# -------------------------------------------------------------------------
+import httpx
+
+FINBOT_API_URL = os.environ.get("FINBOT_API_URL", "http://localhost:8000")
+
+class FinBotChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = "marketprobe-session"
+
+class FinBotOptimizeRequest(BaseModel):
+    tickers: List[str] = ["RELIANCE", "TCS", "INFY", "HDFCBANK"]
+    risk_free_rate: float = 0.065
+    target_return: Optional[float] = None
+
+class FinBotTaxHarvestRequest(BaseModel):
+    holdings: List[Dict[str, Any]]
+    financial_year: str = "2024-25"
+
+@app.get("/api/finbot/status")
+async def get_finbot_status():
+    """Verify connectivity with FinBot AI quantitative core."""
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"{FINBOT_API_URL}/health")
+            if resp.status_code == 200:
+                return {"connected": True, "finbot_url": FINBOT_API_URL, "status": resp.json()}
+    except Exception as e:
+        return {"connected": False, "finbot_url": FINBOT_API_URL, "error": str(e)}
+    return {"connected": False, "finbot_url": FINBOT_API_URL}
+
+@app.post("/api/finbot/chat")
+async def proxy_finbot_chat(req: FinBotChatRequest):
+    """Bridge MarketProbe conversational analyst queries to FinBot Multi-Node Router."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{FINBOT_API_URL}/api/chat",
+                json={"message": req.message, "session_id": req.session_id}
+            )
+            return resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"FinBot AI Gateway unreachable: {str(e)}")
+
+@app.post("/api/finbot/optimize")
+async def proxy_finbot_optimize(req: FinBotOptimizeRequest):
+    """Bridge Modern Portfolio Theory (MPT) optimization from FinBot."""
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                f"{FINBOT_API_URL}/api/portfolio/optimize",
+                json=req.dict()
+            )
+            return resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"FinBot Optimizer unreachable: {str(e)}")
+
+@app.post("/api/finbot/tax-harvest")
+async def proxy_finbot_tax_harvest(req: FinBotTaxHarvestRequest):
+    """Bridge Indian Section 112A Tax-Loss Harvesting calculations."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{FINBOT_API_URL}/api/tax/harvest",
+                json=req.dict()
+            )
+            return resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"FinBot Tax Engine unreachable: {str(e)}")
+
+# -------------------------------------------------------------------------
 # Static Frontend Serving for Single-Container Docker / Cloud Deployment
 # -------------------------------------------------------------------------
 from fastapi.staticfiles import StaticFiles
