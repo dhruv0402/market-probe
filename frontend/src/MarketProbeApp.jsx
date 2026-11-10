@@ -3025,7 +3025,14 @@ export default function MarketProbeApp() {
       </main>
 
       {/* Global Slide-Out Floating FinBot Copilot Drawer */}
-      <FinBotDrawer isOpen={copilotOpen} onClose={() => setCopilotOpen(false)} />
+      <FinBotDrawer 
+        isOpen={copilotOpen} 
+        onClose={() => setCopilotOpen(false)} 
+        onNavigateTab={(targetTab) => {
+          setTab(targetTab);
+          setCopilotOpen(false);
+        }}
+      />
 
       {welcome && (
         <div className="modal-bg">

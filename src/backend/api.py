@@ -1935,14 +1935,32 @@ async def get_finbot_status():
 
 @app.post("/api/finbot/chat")
 async def proxy_finbot_chat(req: FinBotChatRequest):
-    """Bridge MarketProbe conversational analyst queries to FinBot Multi-Node Router."""
+    """
+    Bridge MarketProbe conversational analyst queries to Autonomous Action Engine & FinBot Multi-Node Router.
+    Executes Phase 2 (DB Knowledge Injection) & Phase 4 (Autonomous Actions).
+    """
+    # 1. Attempt autonomous tool cycle on local MarketProbe DB first
+    try:
+        from src.backend.copilot_actions import execute_copilot_tool_cycle
+        tool_res = execute_copilot_tool_cycle(req.message)
+        if tool_res:
+            return tool_res
+    except Exception as e:
+        print("Notice: Copilot tool cycle exception:", e)
+
+    # 2. Dispatch to FinBot Multi-Node Router & Quantitative Solvers
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{FINBOT_API_URL}/api/chat",
                 json={"message": req.message, "session_id": req.session_id}
             )
-            return resp.json()
+            data = resp.json()
+            if isinstance(data, dict):
+                # Ensure action_chips field is present
+                data.setdefault("action_chips", [])
+                data.setdefault("source_node", "gemini-3.5-flash-router")
+            return data
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"FinBot AI Gateway unreachable: {str(e)}")
 
