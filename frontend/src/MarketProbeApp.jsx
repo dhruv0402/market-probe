@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import Tour from './Tour.jsx';
+import FinBotDesk from './FinBotDesk.jsx';
 import './mp.css';
 
 const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || '8080';
@@ -40,6 +41,7 @@ const TABS = [
   { id: 'ALERTS', label: 'Alpha Alerts', icon: Bell },
   { id: 'RANKINGS', label: 'Rankings', icon: Trophy },
   { id: 'SIMULATOR', label: 'P&L Simulator', icon: Calculator },
+  { id: 'FINBOT', label: 'FinBot Advisor', icon: Sparkles },
   { id: 'CHECKER', label: 'Fact-Check', icon: CheckCircle2 },
   { id: 'DATASET', label: 'Dataset', icon: Database },
   { id: 'BILLING', label: 'Plans & Billing', icon: CreditCard },
@@ -2973,6 +2975,7 @@ export default function MarketProbeApp() {
         {tab === 'STOCKS' && <StocksRadar />}
         {tab === 'RANKINGS' && <Rankings />}
         {tab === 'SIMULATOR' && <Simulator />}
+        {tab === 'FINBOT' && <FinBotDesk />}
         {tab === 'CHECKER' && <Checker />}
         {tab === 'DATASET' && <Dataset />}
         {tab === 'BILLING' && <BillingComponent user={user} onUserUpdate={(u) => setUser(u)} />}
