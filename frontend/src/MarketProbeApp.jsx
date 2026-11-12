@@ -6,7 +6,7 @@ import {
   Layers, ChevronRight, BarChart3, AlertTriangle, Sparkles,
   Bell, Download, ArrowRight, Lock, Key, Users, Check, X, Shield, Globe,
   Sun, Moon, Palette, Bookmark, CreditCard, Star, Maximize2, Clock, Copy, ChevronDown,
-  Share2
+  Share2, Terminal
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import Tour from './Tour.jsx';
