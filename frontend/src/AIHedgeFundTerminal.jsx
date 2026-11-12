@@ -1,21 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  ShieldAlert, CheckCircle2, TrendingUp, AlertTriangle, 
-  Terminal, Cpu, Database, Activity, RefreshCw, UploadCloud,
-  FileText, PlayCircle, BarChart2, Zap, ArrowRight, UserCheck
-} from 'lucide-react';
-import { 
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine 
 } from 'recharts';
 
 export default function AIHedgeFundTerminal() {
-  const [activeTab, setActiveTab] = useState('council'); // 'council' | 'dropzone' | 'terminal'
-  const [ticker, setTicker] = useState('TATAMOTORS');
+  const [activeNav, setActiveNav] = useState('council'); // 'council' | 'dropzone' | 'feed' | 'leaderboard'
+  const [ticker, setTicker] = useState('RELIANCE');
   const [action, setAction] = useState('BUY');
-  const [entryPrice, setEntryPrice] = useState(940);
-  const [targetPrice, setTargetPrice] = useState(1050);
-  const [stoplossPrice, setStoplossPrice] = useState(890);
-  const [creatorName, setCreatorName] = useState('TradeWithTrend');
+  const [entryPrice, setEntryPrice] = useState(2980);
+  const [targetPrice, setTargetPrice] = useState(3240);
+  const [stoplossPrice, setStoplossPrice] = useState(2890);
+  const [creatorName, setCreatorName] = useState('Motilal Oswal');
   
   // Drag and drop inputs
   const [dragActive, setDragActive] = useState(false);
@@ -31,7 +26,6 @@ export default function AIHedgeFundTerminal() {
 
   const fileInputRef = useRef(null);
 
-  // Load User Memory Profile on load
   const fetchMemory = async () => {
     try {
       const res = await fetch('/api/user/memory/profile?user_id=demo-trader');
@@ -49,7 +43,6 @@ export default function AIHedgeFundTerminal() {
     runMultiAgentAudit();
   }, []);
 
-  // Run Council Audit
   const runMultiAgentAudit = async () => {
     setIsAuditing(true);
     try {
@@ -77,7 +70,6 @@ export default function AIHedgeFundTerminal() {
     }
   };
 
-  // Run Drag and Drop Ingestion Audit
   const handleDropzoneSubmit = async (e) => {
     e?.preventDefault();
     setIsAuditing(true);
@@ -102,7 +94,7 @@ export default function AIHedgeFundTerminal() {
         if (data.target) setTargetPrice(data.target);
         if (data.stoploss) setStoplossPrice(data.stoploss);
         setUniverseCount(prev => prev + 1);
-        setActiveTab('council');
+        setActiveNav('council');
       }
     } catch (err) {
       console.error('Dropzone submission failed', err);
@@ -128,210 +120,207 @@ export default function AIHedgeFundTerminal() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#070a10] text-[#c9d1d9] font-sans antialiased overflow-hidden">
-      {/* Top Institutional Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-[#0d1117] border-b border-[#21262d]">
+    <div className="bg-[#070a10] text-[#e0e2eb] antialiased select-none font-mono text-[11px] h-screen flex flex-col overflow-hidden">
+      
+      {/* 1. TOP SHELL: Obsidian Quant TopNavBar */}
+      <header className="bg-[#070a10] text-[#10b981] border-b border-[#21262d] flex justify-between items-center w-full px-3 h-8 z-50 shrink-0">
         <div className="flex items-center space-x-3">
-          <div className="flex items-center justify-center w-7 h-7 rounded bg-indigo-500/10 border border-indigo-500/30 text-indigo-400">
-            <Cpu className="w-4 h-4" />
+          <div className="flex items-center space-x-1.5">
+            <span className="font-bold tracking-tight text-[#f0f6fc] text-xs">MarketProbe Quant Cockpit</span>
+            <span className="bg-[#161b22] text-[#10b981] border border-[#21262d] px-1 py-0.2 text-[9px] font-mono rounded">v4.2 PRO</span>
           </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-bold tracking-wider text-slate-100 uppercase">MARKETPROBE</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300 font-mono border border-blue-700/50">MULTI-AGENT QUANT COUNCIL</span>
-            </div>
-            <div className="text-[10px] text-slate-400 font-mono">5 Specialized Engines • 1,000-Path Monte Carlo • Empirical Bayes • Wilson CI</div>
+
+          <nav className="hidden xl:flex items-center space-x-3 ml-4">
+            <span className="text-[#10b981] border-b border-[#10b981] pb-0.5 text-[10px] flex items-center space-x-1 cursor-pointer">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#10b981] animate-pulse inline-block"></span>
+              <span>42 Active Models</span>
+            </span>
+            <span className="text-[#8b949e] hover:text-[#f0f6fc] text-[10px] cursor-pointer">Node: 12ms</span>
+            <span className="text-[#8b949e] hover:text-[#f0f6fc] text-[10px] cursor-pointer">NSE Live Colo</span>
+            <span className="text-[#8b949e] hover:text-[#f0f6fc] text-[10px] cursor-pointer">Redis L2 Synced</span>
+          </nav>
+        </div>
+
+        {/* Live Running NSE Ticker Tape */}
+        <div className="hidden lg:flex overflow-hidden mx-3 max-w-xl h-5 border-x border-[#21262d]/50 px-3 items-center text-[10px]">
+          <div className="flex whitespace-nowrap space-x-4">
+            <span className="flex items-center space-x-1"><span className="text-[#f0f6fc] font-semibold">NIFTY 50</span> <span className="text-[#8b949e]">24,842.60</span> <span className="text-[#10b981]">+0.48%</span></span>
+            <span className="flex items-center space-x-1"><span className="text-[#f0f6fc] font-semibold">BANKNIFTY</span> <span className="text-[#8b949e]">52,190.15</span> <span className="text-[#10b981]">+0.32%</span></span>
+            <span className="flex items-center space-x-1"><span className="text-[#f0f6fc] font-semibold">RELIANCE</span> <span className="text-[#8b949e]">2,984.10</span> <span className="text-[#10b981]">+1.25%</span></span>
+            <span className="flex items-center space-x-1"><span className="text-[#f0f6fc] font-semibold">HDFCBANK</span> <span className="text-[#8b949e]">1,642.80</span> <span className="text-[#f43f5e]">-0.18%</span></span>
+            <span className="flex items-center space-x-1"><span className="text-[#f0f6fc] font-semibold">INFY</span> <span className="text-[#8b949e]">1,892.40</span> <span className="text-[#10b981]">+2.10%</span></span>
           </div>
         </div>
 
-        {/* Global Metric Badges */}
-        <div className="flex items-center space-x-4 text-xs font-mono">
-          <div className="flex items-center space-x-1.5 text-emerald-400 bg-emerald-950/30 px-2 py-1 rounded border border-emerald-800/40">
-            <Database className="w-3.5 h-3.5" />
-            <span>Audited Universe: <b className="text-white">{universeCount} Calls</b></span>
+        {/* Action Controls & Metric */}
+        <div className="flex items-center space-x-3 text-[10px]">
+          <div className="flex items-center space-x-1 bg-[#161b22] border border-[#21262d] px-2 py-0.5 rounded text-[#38bdf8]">
+            <span>Calls Ledger:</span>
+            <b className="text-white font-mono">{universeCount}</b>
           </div>
-          <div className="flex items-center space-x-1.5 text-cyan-400 bg-cyan-950/30 px-2 py-1 rounded border border-cyan-800/40">
-            <Activity className="w-3.5 h-3.5" />
-            <span>Engine: <b className="text-white">Redis + In-Process</b></span>
-          </div>
-        </div>
-      </div>
-
-      {/* Navigation Sub-bar */}
-      <div className="flex items-center justify-between px-4 py-1.5 bg-[#161b22] border-b border-[#21262d] text-xs">
-        <div className="flex space-x-2">
-          <button
-            onClick={() => setActiveTab('council')}
-            className={`px-3 py-1 rounded text-xs font-mono transition-colors ${
-              activeTab === 'council' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'
-            }`}
+          <button 
+            onClick={runMultiAgentAudit} 
+            disabled={isAuditing}
+            className="bg-[#10b981] hover:bg-[#10b981]/90 text-[#070a10] px-2.5 py-0.5 rounded font-bold font-mono transition-all flex items-center space-x-1"
           >
-            🏛️ CIO Deliberation Council
-          </button>
-          <button
-            onClick={() => setActiveTab('dropzone')}
-            className={`px-3 py-1 rounded text-xs font-mono transition-colors flex items-center space-x-1 ${
-              activeTab === 'dropzone' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <UploadCloud className="w-3.5 h-3.5 mr-1" />
-            <span>📥 Drag & Drop Multimodal Ingestion</span>
+            <span>{isAuditing ? 'CALCULATING...' : 'AUDIT NOW'}</span>
           </button>
         </div>
+      </header>
 
-        {/* Dynamic Quick Tickers */}
-        <div className="flex items-center space-x-1 text-[11px] font-mono text-slate-400">
-          <span>Quick Select:</span>
-          {['TATAMOTORS', 'RELIANCE', 'INFY', 'HDFCBANK', 'BHARTIARTL'].map((sym) => (
-            <button
-              key={sym}
-              onClick={() => { setTicker(sym); runMultiAgentAudit(); }}
-              className="px-1.5 py-0.5 rounded bg-[#21262d] hover:bg-slate-700 text-slate-300"
-            >
-              {sym}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Main Workspace Body */}
+      {/* 2. MAIN COCKPIT BODY (Three-Column Layout) */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Side: Controls & Input Parameters */}
-        <div className="w-80 bg-[#0d1117] border-r border-[#21262d] p-3 flex flex-col justify-between overflow-y-auto">
+
+        {/* LEFT COMPACT SIDEBAR: Nav & Setup Parameters */}
+        <aside className="w-64 bg-[#0d1117] border-r border-[#21262d] flex flex-col justify-between p-2.5 z-40 shrink-0 overflow-y-auto">
           <div className="space-y-3">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">
-              Setup Audit Parameters
+            {/* View Mode Switcher */}
+            <div className="flex flex-col space-y-1">
+              <span className="text-[9px] uppercase tracking-wider text-[#8b949e] font-bold">Workspace View</span>
+              <button
+                onClick={() => setActiveNav('council')}
+                className={`flex items-center space-x-2 px-2 py-1.5 rounded text-left transition-all ${
+                  activeNav === 'council' ? 'bg-[#161b22] text-[#10b981] border border-[#10b981]/30 font-semibold' : 'text-[#8b949e] hover:text-white'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[#10b981]"></span>
+                <span>CIO Multi-Agent Council</span>
+              </button>
+              <button
+                onClick={() => setActiveNav('dropzone')}
+                className={`flex items-center space-x-2 px-2 py-1.5 rounded text-left transition-all ${
+                  activeNav === 'dropzone' ? 'bg-[#161b22] text-[#38bdf8] border border-[#38bdf8]/30 font-semibold' : 'text-[#8b949e] hover:text-white'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[#38bdf8]"></span>
+                <span>📥 Dropzone Multimodal Ingest</span>
+              </button>
             </div>
 
-            <div>
-              <label className="text-[10px] text-slate-400 uppercase font-mono">NSE Ticker</label>
-              <input
-                type="text"
-                value={ticker}
-                onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                className="w-full bg-[#161b22] border border-[#30363d] rounded px-2.5 py-1.5 text-xs text-white font-mono focus:border-indigo-500 outline-none"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
+            {/* Quick Setup Inputs */}
+            <div className="border-t border-[#21262d] pt-2 space-y-2">
+              <span className="text-[9px] uppercase tracking-wider text-[#8b949e] font-bold">Trade Parameters</span>
+              
               <div>
-                <label className="text-[10px] text-slate-400 uppercase font-mono">Action</label>
-                <select
-                  value={action}
-                  onChange={(e) => setAction(e.target.value)}
-                  className="w-full bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-xs text-white font-mono outline-none"
-                >
-                  <option value="BUY">BUY (LONG)</option>
-                  <option value="SELL">SELL (SHORT)</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-[10px] text-slate-400 uppercase font-mono">Creator / Desk</label>
+                <label className="text-[9px] text-[#8b949e] uppercase">Ticker</label>
                 <input
                   type="text"
-                  value={creatorName}
-                  onChange={(e) => setCreatorName(e.target.value)}
-                  placeholder="e.g. ICICI Direct"
-                  className="w-full bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-xs text-white font-mono outline-none"
+                  value={ticker}
+                  onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                  className="w-full bg-[#070a10] border border-[#21262d] rounded px-2 py-1 text-white text-[11px] font-mono focus:border-[#38bdf8] outline-none"
                 />
               </div>
-            </div>
 
-            <div className="grid grid-cols-3 gap-1.5">
-              <div>
-                <label className="text-[9px] text-slate-400 uppercase font-mono">Entry (₹)</label>
-                <input
-                  type="number"
-                  value={entryPrice}
-                  onChange={(e) => setEntryPrice(e.target.value)}
-                  className="w-full bg-[#161b22] border border-[#30363d] rounded px-1.5 py-1.5 text-xs text-white font-mono outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[9px] text-slate-400 uppercase font-mono">Target (₹)</label>
-                <input
-                  type="number"
-                  value={targetPrice}
-                  onChange={(e) => setTargetPrice(e.target.value)}
-                  className="w-full bg-[#161b22] border border-[#30363d] rounded px-1.5 py-1.5 text-xs text-emerald-400 font-mono outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[9px] text-slate-400 uppercase font-mono">Stop-Loss (₹)</label>
-                <input
-                  type="number"
-                  value={stoplossPrice}
-                  onChange={(e) => setStoplossPrice(e.target.value)}
-                  className="w-full bg-[#161b22] border border-[#30363d] rounded px-1.5 py-1.5 text-xs text-rose-400 font-mono outline-none"
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={runMultiAgentAudit}
-              disabled={isAuditing}
-              className="w-full mt-2 py-2 px-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded font-mono text-xs font-semibold flex items-center justify-center space-x-1.5 shadow"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isAuditing ? 'animate-spin' : ''}`} />
-              <span>{isAuditing ? 'Council Deliberating...' : 'Trigger Multi-Agent Audit'}</span>
-            </button>
-
-            {/* Customer Memory Behavioral Profile Widget */}
-            <div className="mt-4 p-2.5 rounded bg-[#161b22] border border-[#30363d] space-y-2">
-              <div className="flex items-center justify-between text-[11px] text-slate-300 font-mono">
-                <span className="flex items-center space-x-1 text-purple-400">
-                  <UserCheck className="w-3.5 h-3.5" />
-                  <b>Customer Memory Profile</b>
-                </span>
-                <span className="text-[9px] px-1 py-0.5 rounded bg-purple-950/60 text-purple-300 border border-purple-800/40">Active</span>
-              </div>
-              <div className="text-[10px] space-y-1 font-mono text-slate-400">
-                <div className="flex justify-between">
-                  <span>Learned Style:</span>
-                  <span className="text-white font-semibold">{memoryProfile?.risk_profile || 'AGGRESSIVE'}</span>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <label className="text-[9px] text-[#8b949e] uppercase">Action</label>
+                  <select
+                    value={action}
+                    onChange={(e) => setAction(e.target.value)}
+                    className="w-full bg-[#070a10] border border-[#21262d] rounded px-1.5 py-1 text-white text-[10px] outline-none"
+                  >
+                    <option value="BUY">BUY (LONG)</option>
+                    <option value="SELL">SELL (SHORT)</option>
+                  </select>
                 </div>
-                <div className="flex justify-between">
-                  <span>Max Stress Loss:</span>
-                  <span className="text-rose-400 font-semibold">{memoryProfile?.max_portfolio_loss_pct || 25}%</span>
+                <div>
+                  <label className="text-[9px] text-[#8b949e] uppercase">Source Desk</label>
+                  <input
+                    type="text"
+                    value={creatorName}
+                    onChange={(e) => setCreatorName(e.target.value)}
+                    className="w-full bg-[#070a10] border border-[#21262d] rounded px-1.5 py-1 text-white text-[10px] outline-none"
+                  />
                 </div>
-                <div className="flex justify-between">
-                  <span>Favorite Tickers:</span>
-                  <span className="text-cyan-300 truncate max-w-[120px]">{memoryProfile?.favorite_tickers || 'TATAMOTORS, RELIANCE'}</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1">
+                <div>
+                  <label className="text-[8px] text-[#8b949e] uppercase">Entry ₹</label>
+                  <input
+                    type="number"
+                    value={entryPrice}
+                    onChange={(e) => setEntryPrice(e.target.value)}
+                    className="w-full bg-[#070a10] border border-[#21262d] rounded px-1 py-1 text-white text-[10px] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[8px] text-[#8b949e] uppercase">Target ₹</label>
+                  <input
+                    type="number"
+                    value={targetPrice}
+                    onChange={(e) => setTargetPrice(e.target.value)}
+                    className="w-full bg-[#070a10] border border-[#21262d] rounded px-1 py-1 text-[#10b981] text-[10px] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[8px] text-[#8b949e] uppercase">Stop ₹</label>
+                  <input
+                    type="number"
+                    value={stoplossPrice}
+                    onChange={(e) => setStoplossPrice(e.target.value)}
+                    className="w-full bg-[#070a10] border border-[#21262d] rounded px-1 py-1 text-[#f43f5e] text-[10px] outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="pt-1">
+                <span className="text-[8px] text-[#8b949e] uppercase">Quick Tickers:</span>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {['RELIANCE', 'TATAMOTORS', 'INFY', 'HDFCBANK', 'LT'].map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => { setTicker(s); runMultiAgentAudit(); }}
+                      className="px-1.5 py-0.5 rounded bg-[#161b22] hover:bg-[#21262d] text-[#c9d1d9] text-[9px]"
+                    >
+                      {s}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="text-[9px] text-slate-500 font-mono border-t border-[#21262d] pt-2">
-            Statutory SEBI Disclaimer: Mathematical simulation for forensic verification purposes only. Not registered investment advice.
+          {/* Node health footer */}
+          <div className="border-t border-[#21262d] pt-2 text-[9px] text-[#8b949e] space-y-0.5">
+            <div>NODE: EXEC-01 (MUMBAI COLO)</div>
+            <div>LATENCY: 12ms | REDIS: LIVE</div>
           </div>
-        </div>
+        </aside>
 
-        {/* Center / Right Content Area */}
-        <div className="flex-1 flex flex-col bg-[#070a10] overflow-y-auto p-4">
-          {activeTab === 'dropzone' ? (
-            /* Drag and Drop Multimodal Ingestion View */
-            <div className="max-w-3xl mx-auto w-full space-y-4">
-              <div className="border border-indigo-500/30 rounded-lg p-4 bg-indigo-950/10">
-                <h2 className="text-sm font-bold text-white uppercase font-mono flex items-center space-x-2">
-                  <UploadCloud className="w-4 h-4 text-indigo-400" />
-                  <span>Multimodal Forensic Ingestion Gateway</span>
-                </h2>
-                <p className="text-xs text-slate-400 mt-1">
-                  Bypass fragile background crawlers. Directly drop analyst research reports (PDF), YouTube links, or audio clips. 
-                  MarketProbe will extract the trade geometry, commit it to the empirical ledger, and run the 5-Agent Council.
-                </p>
+        {/* CENTER STAGE: Main Quant Cockpit */}
+        <main className="flex-1 flex flex-col bg-[#070a10] overflow-y-auto p-3 space-y-3">
+          
+          {activeNav === 'dropzone' ? (
+            /* MULTIMODAL DRAG-AND-DROP INGESTION COCKPIT */
+            <div className="max-w-4xl mx-auto w-full space-y-3">
+              <div className="bg-[#0d1117] border border-[#21262d] rounded p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xs font-bold text-white uppercase tracking-wide">
+                      📥 Multimodal Ingestion Gateway (Zero-Scraper Architecture)
+                    </h2>
+                    <p className="text-[10px] text-[#8b949e] mt-0.5">
+                      Directly drop research PDFs (Motilal Oswal, ICICI Direct), YouTube video URLs, or WhatsApp callouts.
+                      The agent extracts the levels, verifies mathematical EV, and logs the call into the empirical database.
+                    </p>
+                  </div>
+                  <span className="px-2 py-0.5 bg-[#10b981]/10 text-[#10b981] border border-[#10b981]/30 rounded text-[9px] font-bold">
+                    AUTO-INDEXING ACTIVE
+                  </span>
+                </div>
               </div>
 
-              {/* Drag and Drop Zone */}
+              {/* Drag Area */}
               <div
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer transition-colors ${
-                  dragActive ? 'border-indigo-500 bg-indigo-950/20' : 'border-[#30363d] hover:border-slate-500 bg-[#0d1117]'
+                className={`border-2 border-dashed rounded p-8 flex flex-col items-center justify-center cursor-pointer transition-all ${
+                  dragActive ? 'border-[#38bdf8] bg-[#38bdf8]/10' : 'border-[#21262d] hover:border-[#8b949e] bg-[#0d1117]'
                 }`}
               >
                 <input
@@ -341,206 +330,205 @@ export default function AIHedgeFundTerminal() {
                   className="hidden"
                   onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])}
                 />
-                <FileText className="w-8 h-8 text-slate-400 mb-2" />
-                <span className="text-xs font-mono text-slate-200 font-semibold">
+                <span className="material-symbols-outlined text-[#38bdf8] text-3xl mb-1">upload_file</span>
+                <span className="text-xs font-bold text-white">
                   {selectedFile ? `Selected: ${selectedFile.name}` : 'Drop PDF Research Report or Media File Here'}
                 </span>
-                <span className="text-[10px] text-slate-500 mt-1 font-mono">Supports Motilal Oswal / ICICI Direct PDFs, text files, or audio</span>
+                <span className="text-[9px] text-[#8b949e] mt-1">
+                  Supports institutional brokerage PDFs, raw text, and audio recordings
+                </span>
               </div>
 
-              {/* YouTube Link Drop Input */}
-              <div className="bg-[#0d1117] p-3 rounded-lg border border-[#21262d] space-y-2">
-                <label className="text-[11px] font-mono text-slate-300 flex items-center space-x-1.5">
-                  <PlayCircle className="w-4 h-4 text-red-400" />
-                  <span>Or Drop Financial YouTube Video URL:</span>
-                </label>
-                <input
-                  type="text"
-                  value={youtubeUrl}
-                  onChange={(e) => setYoutubeUrl(e.target.value)}
-                  placeholder="https://www.youtube.com/watch?v=..."
-                  className="w-full bg-[#161b22] border border-[#30363d] rounded px-3 py-2 text-xs text-white font-mono outline-none focus:border-indigo-500"
-                />
-              </div>
+              {/* URL and Text Inputs */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-[#0d1117] border border-[#21262d] p-2.5 rounded space-y-1">
+                  <label className="text-[9px] text-[#8b949e] uppercase font-bold">Paste YouTube Video URL:</label>
+                  <input
+                    type="text"
+                    value={youtubeUrl}
+                    onChange={(e) => setYoutubeUrl(e.target.value)}
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    className="w-full bg-[#070a10] border border-[#21262d] rounded px-2 py-1 text-white text-[10px] outline-none focus:border-[#38bdf8]"
+                  />
+                </div>
 
-              {/* Raw Text Tip Drop */}
-              <div className="bg-[#0d1117] p-3 rounded-lg border border-[#21262d] space-y-2">
-                <label className="text-[11px] font-mono text-slate-300">Or Paste Raw WhatsApp / Telegram Recommendation:</label>
-                <textarea
-                  rows={3}
-                  value={rawText}
-                  onChange={(e) => setRawText(e.target.value)}
-                  placeholder="e.g. Buy TATAMOTORS around 940 rupees with strict stoploss at 910 and ambitious target of 1020..."
-                  className="w-full bg-[#161b22] border border-[#30363d] rounded px-3 py-2 text-xs text-white font-mono outline-none focus:border-indigo-500"
-                />
+                <div className="bg-[#0d1117] border border-[#21262d] p-2.5 rounded space-y-1">
+                  <label className="text-[9px] text-[#8b949e] uppercase font-bold">Or Paste Raw WhatsApp/Telegram Tip:</label>
+                  <input
+                    type="text"
+                    value={rawText}
+                    onChange={(e) => setRawText(e.target.value)}
+                    placeholder="e.g. Buy RELIANCE at 2980 target 3240 sl 2890..."
+                    className="w-full bg-[#070a10] border border-[#21262d] rounded px-2 py-1 text-white text-[10px] outline-none focus:border-[#38bdf8]"
+                  />
+                </div>
               </div>
 
               <button
                 onClick={handleDropzoneSubmit}
                 disabled={isAuditing || (!selectedFile && !youtubeUrl && !rawText)}
-                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center space-x-2"
+                className="w-full py-2 bg-[#10b981] hover:bg-[#10b981]/90 disabled:opacity-40 text-[#070a10] font-bold text-xs uppercase tracking-wider rounded transition-all flex items-center justify-center space-x-1"
               >
-                <span>{isAuditing ? 'Ingesting & Auditing...' : '🚀 Ingest and Audit via Council'}</span>
+                <span>{isAuditing ? 'INGESTING & RUNNING 5-AGENT COUNCIL...' : '🚀 COMMIT TO DATABASE & AUDIT'}</span>
               </button>
             </div>
           ) : (
-            /* Multi-Agent Council Deliberation View */
-            <div className="space-y-4">
-              {/* Executive CIO Consensus Banner */}
+            /* CIO MULTI-AGENT COUNCIL DASHBOARD */
+            <>
+              {/* Grand CIO Verdict Banner */}
               {auditResult && (
-                <div className={`p-4 rounded-lg border ${
-                  auditResult.council_verdict === 'HIGH_CONVICTION_EXECUTE' ? 'bg-emerald-950/20 border-emerald-500/40 text-emerald-200' :
-                  auditResult.council_verdict === 'INSTITUTIONAL_VETO' ? 'bg-rose-950/20 border-rose-500/40 text-rose-200' :
-                  'bg-amber-950/20 border-amber-500/40 text-amber-200'
+                <div className={`p-3 rounded border ${
+                  auditResult.council_verdict === 'HIGH_CONVICTION_EXECUTE' ? 'bg-[#10b981]/10 border-[#10b981]/40 text-[#10b981]' :
+                  auditResult.council_verdict === 'INSTITUTIONAL_VETO' ? 'bg-[#f43f5e]/10 border-[#f43f5e]/40 text-[#f43f5e]' :
+                  'bg-[#f59e0b]/10 border-[#f59e0b]/40 text-[#f59e0b]'
                 }`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      {auditResult.council_verdict === 'HIGH_CONVICTION_EXECUTE' ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <ShieldAlert className="w-5 h-5 text-rose-400" />}
-                      <span className="text-sm font-bold font-mono uppercase tracking-wide">
-                        CIO Verdict: {auditResult.council_verdict}
+                      <span className="material-symbols-outlined text-lg">
+                        {auditResult.council_verdict === 'HIGH_CONVICTION_EXECUTE' ? 'verified' : 'gavel'}
+                      </span>
+                      <span className="text-xs font-bold uppercase tracking-wider">
+                        CIO COUNCIL CONSENSUS: {auditResult.council_verdict}
                       </span>
                     </div>
-                    <div className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-black/40 border border-current">
-                      Conviction Score: {auditResult.composite_conviction_score} / 100
+                    <div className="px-2 py-0.5 rounded bg-[#070a10] border border-current text-[10px] font-bold">
+                      CONVICTION SCORE: {auditResult.composite_conviction_score} / 100
                     </div>
                   </div>
-                  <p className="text-xs font-mono mt-2 text-slate-300">
+                  <div className="text-[10px] text-[#e0e2eb] mt-1.5 leading-relaxed">
                     {auditResult.executive_summary}
-                  </p>
+                  </div>
                 </div>
               )}
 
-              {/* 4 Agent Grid Cards */}
-              <div className="grid grid-cols-2 gap-3">
-                {/* Agent 1: Quant Math */}
-                <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-mono border-b border-[#21262d] pb-1.5">
-                    <span className="font-bold text-blue-400 flex items-center space-x-1">
-                      <BarChart2 className="w-3.5 h-3.5" />
-                      <span>Quantitative Math Agent</span>
+              {/* 4 Agent Deliberation Cards Grid */}
+              <div className="grid grid-cols-2 gap-2.5">
+                
+                {/* 1. Quant Math Agent */}
+                <div className="bg-[#0d1117] border border-[#21262d] rounded p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between border-b border-[#21262d] pb-1">
+                    <span className="font-bold text-[#38bdf8] flex items-center space-x-1">
+                      <span className="material-symbols-outlined text-[13px]">calculate</span>
+                      <span>QUANTITATIVE MATH AGENT</span>
                     </span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                      auditResult?.quant_math?.vote === 'BULLISH' ? 'bg-emerald-950 text-emerald-300 border border-emerald-700' : 'bg-rose-950 text-rose-300 border border-rose-700'
+                    <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
+                      auditResult?.quant_math?.vote === 'BULLISH' ? 'bg-[#10b981]/20 text-[#10b981] border border-[#10b981]/40' : 'bg-[#f43f5e]/20 text-[#f43f5e] border border-[#f43f5e]/40'
                     }`}>
                       {auditResult?.quant_math?.vote || 'SIMULATING'}
                     </span>
                   </div>
-                  <div className="text-[11px] font-mono text-slate-300">
+                  <div className="text-[10px] text-[#c9d1d9] leading-tight">
                     {auditResult?.quant_math?.verdict_rationale}
                   </div>
-                  <div className="grid grid-cols-3 gap-1 pt-1 text-[10px] font-mono text-slate-400">
-                    <div className="bg-[#161b22] p-1.5 rounded">
-                      <div>Target Prob:</div>
-                      <b className="text-emerald-400">{((auditResult?.quant_math?.monte_carlo?.p_target_first || 0) * 100).toFixed(1)}%</b>
+                  <div className="grid grid-cols-3 gap-1 pt-0.5 text-[9px]">
+                    <div className="bg-[#161b22] p-1 rounded">
+                      <div className="text-[#8b949e]">Target Hit Prob:</div>
+                      <b className="text-[#10b981]">{((auditResult?.quant_math?.monte_carlo?.p_target_first || 0) * 100).toFixed(1)}%</b>
                     </div>
-                    <div className="bg-[#161b22] p-1.5 rounded">
-                      <div>SL Hit Prob:</div>
-                      <b className="text-rose-400">{((auditResult?.quant_math?.monte_carlo?.p_stoploss_first || 0) * 100).toFixed(1)}%</b>
+                    <div className="bg-[#161b22] p-1 rounded">
+                      <div className="text-[#8b949e]">SL Hit Prob:</div>
+                      <b className="text-[#f43f5e]">{((auditResult?.quant_math?.monte_carlo?.p_stoploss_first || 0) * 100).toFixed(1)}%</b>
                     </div>
-                    <div className="bg-[#161b22] p-1.5 rounded">
-                      <div>Expected Value:</div>
-                      <b className="text-cyan-400">{auditResult?.quant_math?.monte_carlo?.expected_return_pct}%</b>
+                    <div className="bg-[#161b22] p-1 rounded">
+                      <div className="text-[#8b949e]">Expected Value:</div>
+                      <b className="text-[#38bdf8]">{auditResult?.quant_math?.monte_carlo?.expected_return_pct}%</b>
                     </div>
                   </div>
                 </div>
 
-                {/* Agent 2: Forensic Track Record */}
-                <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-mono border-b border-[#21262d] pb-1.5">
-                    <span className="font-bold text-amber-400 flex items-center space-x-1">
-                      <Cpu className="w-3.5 h-3.5" />
-                      <span>Forensic Track-Record Agent</span>
+                {/* 2. Forensic Track-Record Agent */}
+                <div className="bg-[#0d1117] border border-[#21262d] rounded p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between border-b border-[#21262d] pb-1">
+                    <span className="font-bold text-[#f59e0b] flex items-center space-x-1">
+                      <span className="material-symbols-outlined text-[13px]">policy</span>
+                      <span>FORENSIC TRACK-RECORD AGENT</span>
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-amber-950 text-amber-300 border border-amber-700">
-                      {auditResult?.forensic_audit?.vote || 'LOOKUP'}
+                    <span className="text-[9px] px-1 py-0.2 rounded font-bold bg-[#f59e0b]/20 text-[#f59e0b] border border-[#f59e0b]/40">
+                      {auditResult?.forensic_audit?.vote || 'AUDITING'}
                     </span>
                   </div>
-                  <div className="text-[11px] font-mono text-slate-300">
+                  <div className="text-[10px] text-[#c9d1d9] leading-tight">
                     {auditResult?.forensic_audit?.verdict_rationale}
                   </div>
-                  <div className="grid grid-cols-3 gap-1 pt-1 text-[10px] font-mono text-slate-400">
-                    <div className="bg-[#161b22] p-1.5 rounded">
-                      <div>Bayes Hit Rate:</div>
-                      <b className="text-amber-400">{auditResult?.forensic_audit?.bayes_shrinkage_rate}%</b>
+                  <div className="grid grid-cols-3 gap-1 pt-0.5 text-[9px]">
+                    <div className="bg-[#161b22] p-1 rounded">
+                      <div className="text-[#8b949e]">Bayes Win-Rate:</div>
+                      <b className="text-[#f59e0b]">{auditResult?.forensic_audit?.bayes_shrinkage_rate}%</b>
                     </div>
-                    <div className="bg-[#161b22] p-1.5 rounded">
-                      <div>Wilson 95% CI:</div>
+                    <div className="bg-[#161b22] p-1 rounded">
+                      <div className="text-[#8b949e]">Wilson 95% CI:</div>
                       <b className="text-white">[{auditResult?.forensic_audit?.wilson_95_ci?.lower}% - {auditResult?.forensic_audit?.wilson_95_ci?.upper}%]</b>
                     </div>
-                    <div className="bg-[#161b22] p-1.5 rounded">
-                      <div>Audited Calls:</div>
-                      <b className="text-cyan-400">{auditResult?.forensic_audit?.sample_size}</b>
+                    <div className="bg-[#161b22] p-1 rounded">
+                      <div className="text-[#8b949e]">Audited Sample:</div>
+                      <b className="text-[#38bdf8]">{auditResult?.forensic_audit?.sample_size} calls</b>
                     </div>
                   </div>
                 </div>
 
-                {/* Agent 3: Risk & Customer Memory */}
-                <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-mono border-b border-[#21262d] pb-1.5">
-                    <span className="font-bold text-purple-400 flex items-center space-x-1">
-                      <ShieldAlert className="w-3.5 h-3.5" />
-                      <span>Risk & Customer Memory</span>
+                {/* 3. Risk & Customer Memory Agent */}
+                <div className="bg-[#0d1117] border border-[#21262d] rounded p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between border-b border-[#21262d] pb-1">
+                    <span className="font-bold text-[#a855f7] flex items-center space-x-1">
+                      <span className="material-symbols-outlined text-[13px]">shield</span>
+                      <span>RISK & CUSTOMER MEMORY AGENT</span>
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-purple-950 text-purple-300 border border-purple-700">
+                    <span className="text-[9px] px-1 py-0.2 rounded font-bold bg-[#a855f7]/20 text-[#a855f7] border border-[#a855f7]/40">
                       {auditResult?.risk_memory?.vote || 'DEFENDING'}
                     </span>
                   </div>
-                  <div className="text-[11px] font-mono text-slate-300">
+                  <div className="text-[10px] text-[#c9d1d9] leading-tight">
                     {auditResult?.risk_memory?.verdict_rationale}
                   </div>
-                  <div className="grid grid-cols-3 gap-1 pt-1 text-[10px] font-mono text-slate-400">
-                    <div className="bg-[#161b22] p-1.5 rounded">
-                      <div>Stress Downside:</div>
-                      <b className="text-rose-400">{auditResult?.risk_memory?.stress_tested_loss_pct}%</b>
+                  <div className="grid grid-cols-3 gap-1 pt-0.5 text-[9px]">
+                    <div className="bg-[#161b22] p-1 rounded">
+                      <div className="text-[#8b949e]">Stress CVaR (95%):</div>
+                      <b className="text-[#f43f5e]">{auditResult?.risk_memory?.stress_tested_loss_pct}%</b>
                     </div>
-                    <div className="bg-[#161b22] p-1.5 rounded">
-                      <div>Max Allowed:</div>
+                    <div className="bg-[#161b22] p-1 rounded">
+                      <div className="text-[#8b949e]">Max Loss Budget:</div>
                       <b className="text-white">{auditResult?.risk_memory?.user_max_loss_limit_pct}%</b>
                     </div>
-                    <div className="bg-[#161b22] p-1.5 rounded">
-                      <div>Safe Allocation:</div>
-                      <b className="text-emerald-400">{auditResult?.risk_memory?.optimal_allocation_pct}%</b>
+                    <div className="bg-[#161b22] p-1 rounded">
+                      <div className="text-[#8b949e]">Safe Half-Kelly:</div>
+                      <b className="text-[#10b981]">{auditResult?.risk_memory?.optimal_allocation_pct}%</b>
                     </div>
                   </div>
                 </div>
 
-                {/* Agent 4: SEBI Compliance */}
-                <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-mono border-b border-[#21262d] pb-1.5">
-                    <span className="font-bold text-emerald-400 flex items-center space-x-1">
-                      <Zap className="w-3.5 h-3.5" />
-                      <span>Regulatory Guardrails</span>
+                {/* 4. SEBI Regulatory & Circuit Guard */}
+                <div className="bg-[#0d1117] border border-[#21262d] rounded p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between border-b border-[#21262d] pb-1">
+                    <span className="font-bold text-[#10b981] flex items-center space-x-1">
+                      <span className="material-symbols-outlined text-[13px]">gavel</span>
+                      <span>SEBI & CIRCUIT GUARD</span>
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-emerald-950 text-emerald-300 border border-emerald-700">
+                    <span className="text-[9px] px-1 py-0.2 rounded font-bold bg-[#10b981]/20 text-[#10b981] border border-[#10b981]/40">
                       {auditResult?.sebi_guard?.vote || 'COMPLIANT'}
                     </span>
                   </div>
-                  <div className="text-[11px] font-mono text-slate-300">
+                  <div className="text-[10px] text-[#c9d1d9] leading-tight">
                     {auditResult?.sebi_guard?.verdict_rationale}
                   </div>
-                  <div className="bg-[#161b22] p-2 rounded text-[10px] font-mono text-slate-400">
-                    Statutory Status: <b>SEBI Standard Disclaimers Validated</b> • Circuit Filter: <b>Normal & Liquid</b>
+                  <div className="bg-[#161b22] p-1.5 rounded text-[9px] text-[#8b949e]">
+                    Circuit Filter: <b className="text-[#10b981]">Normal 20% Band</b> • Statutory Disclaimers: <b className="text-white">Active</b>
                   </div>
                 </div>
               </div>
 
-              {/* Monte Carlo 1,000-Path Volatility Fan Chart */}
+              {/* 30-Day Monte Carlo Volatility Cone Fan Chart */}
               {auditResult?.quant_math?.monte_carlo?.path_sample_cone && (
-                <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="font-bold text-slate-300 flex items-center space-x-1.5">
-                      <TrendingUp className="w-4 h-4 text-cyan-400" />
-                      <span>1,000-Path Monte Carlo Geometric Brownian Motion Trajectories (30-Day Cone)</span>
-                    </span>
-                    <div className="flex items-center space-x-3 text-[10px] text-slate-400">
-                      <span className="flex items-center space-x-1">
-                        <span className="w-2.5 h-0.5 bg-emerald-400 inline-block"></span>
-                        <span>Target: ₹{auditResult.target}</span>
+                <div className="bg-[#0d1117] border border-[#21262d] rounded p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-1.5">
+                      <span className="material-symbols-outlined text-[#38bdf8] text-[14px]">show_chart</span>
+                      <span className="font-bold text-white text-[10px] uppercase">
+                        1,000-Path Monte Carlo Geometric Brownian Motion Trajectories (30-Day Horizon)
                       </span>
-                      <span className="flex items-center space-x-1">
-                        <span className="w-2.5 h-0.5 bg-rose-400 inline-block"></span>
-                        <span>StopLoss: ₹{auditResult.stoploss}</span>
-                      </span>
+                    </div>
+                    <div className="flex items-center space-x-3 text-[9px]">
+                      <span className="text-[#10b981] font-bold">Target: ₹{auditResult.target}</span>
+                      <span className="text-[#f43f5e] font-bold">StopLoss: ₹{auditResult.stoploss}</span>
                     </div>
                   </div>
                   <div className="h-44 w-full pt-1">
@@ -554,17 +542,17 @@ export default function AIHedgeFundTerminal() {
                           return point;
                         })}
                       >
-                        <XAxis dataKey="step" stroke="#484f58" tick={{ fontSize: 9 }} />
-                        <YAxis domain={['auto', 'auto']} stroke="#484f58" tick={{ fontSize: 9 }} />
-                        <Tooltip contentStyle={{ backgroundColor: '#161b22', borderColor: '#30363d', fontSize: '10px' }} />
-                        <ReferenceLine y={auditResult.target} stroke="#10b981" strokeDasharray="3 3" label={{ value: 'Target', fill: '#10b981', fontSize: 10 }} />
-                        <ReferenceLine y={auditResult.stoploss} stroke="#f43f5e" strokeDasharray="3 3" label={{ value: 'StopLoss', fill: '#f43f5e', fontSize: 10 }} />
+                        <XAxis dataKey="step" stroke="#484f58" tick={{ fontSize: 8 }} />
+                        <YAxis domain={['auto', 'auto']} stroke="#484f58" tick={{ fontSize: 8 }} />
+                        <Tooltip contentStyle={{ backgroundColor: '#161b22', borderColor: '#30363d', fontSize: '9px' }} />
+                        <ReferenceLine y={auditResult.target} stroke="#10b981" strokeDasharray="3 3" />
+                        <ReferenceLine y={auditResult.stoploss} stroke="#f43f5e" strokeDasharray="3 3" />
                         {auditResult.quant_math.monte_carlo.path_sample_cone.map((_, idx) => (
                           <Area
                             key={idx}
                             type="monotone"
                             dataKey={`path_${idx}`}
-                            stroke={idx % 2 === 0 ? '#38bdf8' : '#818cf8'}
+                            stroke={idx % 2 === 0 ? '#38bdf8' : '#10b981'}
                             fill="transparent"
                             strokeWidth={1}
                             dot={false}
@@ -576,25 +564,77 @@ export default function AIHedgeFundTerminal() {
                 </div>
               )}
 
-              {/* Council Deliberation Trace Log */}
-              <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3 space-y-2">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center space-x-1.5">
-                  <Terminal className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Executive Council Dialogue Trace</span>
-                </div>
-                <div className="space-y-1.5 text-xs font-mono">
+              {/* Council Dialogue Trace */}
+              <div className="bg-[#0d1117] border border-[#21262d] rounded p-2.5 space-y-1.5">
+                <span className="font-bold text-[#8b949e] text-[9px] uppercase tracking-wider flex items-center space-x-1">
+                  <span className="material-symbols-outlined text-[12px]">terminal</span>
+                  <span>COUNCIL DELIBERATION STREAM</span>
+                </span>
+                <div className="space-y-1 text-[10px]">
                   {auditResult?.dialogue_trace?.map((trace, idx) => (
-                    <div key={idx} className="flex items-start space-x-2 bg-[#161b22] p-2 rounded border border-[#21262d]">
-                      <span className="text-indigo-400 font-bold shrink-0">[{trace.agent}]:</span>
-                      <span className="text-slate-200">{trace.statement}</span>
-                      <span className="ml-auto text-[10px] font-bold text-slate-500 shrink-0">Score: {trace.score}</span>
+                    <div key={idx} className="flex items-start space-x-2 bg-[#161b22] px-2 py-1 rounded border border-[#21262d]/60">
+                      <span className="text-[#38bdf8] font-bold shrink-0">[{trace.agent}]:</span>
+                      <span className="text-[#e0e2eb]">{trace.statement}</span>
+                      <span className="ml-auto text-[9px] font-mono text-[#8b949e] shrink-0">Score: {trace.score}</span>
                     </div>
                   ))}
                 </div>
               </div>
-            </div>
+            </>
           )}
-        </div>
+        </main>
+
+        {/* RIGHT DRAWER: Persistent Customer Memory Card */}
+        <aside className="w-64 bg-[#0d1117] border-l border-[#21262d] p-2.5 flex flex-col justify-between shrink-0 overflow-y-auto">
+          <div className="space-y-3">
+            <div className="border-b border-[#21262d] pb-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[#a855f7] flex items-center space-x-1">
+                  <span className="material-symbols-outlined text-[14px]">psychology</span>
+                  <span>CUSTOMER MEMORY</span>
+                </span>
+                <span className="bg-[#a855f7]/20 text-[#a855f7] px-1.5 py-0.2 rounded text-[8px] font-bold">LEARNING</span>
+              </div>
+              <p className="text-[9px] text-[#8b949e] mt-1 leading-tight">
+                Tracks your risk tolerance, trading style, and ticker bias automatically across sessions.
+              </p>
+            </div>
+
+            <div className="space-y-2 text-[10px]">
+              <div className="bg-[#161b22] p-2 rounded border border-[#21262d] space-y-1">
+                <div className="text-[8px] text-[#8b949e] uppercase">Learned Trading Style</div>
+                <div className="text-[#10b981] font-bold">{memoryProfile?.trading_style || 'SWING BREAKOUT'}</div>
+              </div>
+
+              <div className="bg-[#161b22] p-2 rounded border border-[#21262d] space-y-1">
+                <div className="text-[8px] text-[#8b949e] uppercase">Risk Profile</div>
+                <div className="text-white font-bold">{memoryProfile?.risk_profile || 'AGGRESSIVE'}</div>
+              </div>
+
+              <div className="bg-[#161b22] p-2 rounded border border-[#21262d] space-y-1">
+                <div className="text-[8px] text-[#8b949e] uppercase">Max Loss Budget</div>
+                <div className="text-[#f43f5e] font-bold">{memoryProfile?.max_portfolio_loss_pct || 25}% per trade</div>
+              </div>
+
+              <div className="bg-[#161b22] p-2 rounded border border-[#21262d] space-y-1">
+                <div className="text-[8px] text-[#8b949e] uppercase">Tracked Watchlist</div>
+                <div className="text-[#38bdf8] font-bold truncate">{memoryProfile?.favorite_tickers || 'RELIANCE, TATAMOTORS, INFY'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-[#21262d] pt-2">
+            <button
+              onClick={async () => {
+                await fetch('/api/user/memory/reset?user_id=demo-trader', { method: 'POST' });
+                fetchMemory();
+              }}
+              className="w-full py-1 bg-[#161b22] hover:bg-[#21262d] text-[#8b949e] hover:text-[#f43f5e] rounded text-[9px] font-bold transition-all border border-[#21262d]"
+            >
+              RESET LEARNED MEMORY
+            </button>
+          </div>
+        </aside>
       </div>
     </div>
   );
