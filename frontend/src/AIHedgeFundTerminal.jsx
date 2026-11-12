@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Terminal, ShieldAlert, Cpu, Sparkles, TrendingUp, TrendingDown,
   AlertCircle, RefreshCw, PlayCircle, BarChart3, Search, ArrowUpRight,
-  Sliders, ShieldCheck, Crosshair, Zap, FileText, CornerDownLeft, Eye, Award
+  Sliders, ShieldCheck, Crosshair, Zap, FileText, CornerDownLeft, Eye, Award,
+  Brain, UserCheck, Heart, User, RotateCcw
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 
@@ -12,16 +13,29 @@ export default function AIHedgeFundTerminal() {
   const [activeSymbol, setActiveSymbol] = useState('TATAMOTORS');
   const [candleData, setCandleData] = useState([]);
   const [auditResult, setAuditResult] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
   const [history, setHistory] = useState([
     {
       timestamp: '09:15:02',
       type: 'SYSTEM_BOOT',
-      text: 'Institutional Risk Engine initialized. Connected to 2,559 NSE equites universe, 2,448 historical calls, 74 YouTube audio transcripts, and Gemini 3.5 Flash primary router.',
+      text: 'Institutional Risk Engine initialized. Connected to 2,559 NSE equites universe, 2,448 historical calls, 74 YouTube audio transcripts, and Persistent Customer Memory.',
       engine: 'kernel'
     }
   ]);
   const [quickTips, setQuickTips] = useState([]);
   const logEndRef = useRef(null);
+
+  // Fetch customer memory profile
+  const fetchMemoryProfile = () => {
+    fetch('/api/user/memory/profile?user_id=demo-trader')
+      .then(res => res.json())
+      .then(data => setUserProfile(data))
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchMemoryProfile();
+  }, []);
 
   // Fetch live candles for active symbol
   useEffect(() => {
@@ -65,7 +79,7 @@ export default function AIHedgeFundTerminal() {
         timestamp: timeStr,
         type: 'INPUT_DISPATCH',
         text: textToRun,
-        engine: 'analyst'
+        engine: 'trader'
       }
     ]);
 
@@ -73,12 +87,15 @@ export default function AIHedgeFundTerminal() {
       const res = await fetch('/api/finbot/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: textToRun, session_id: 'hedge-fund-terminal' })
+        body: JSON.stringify({ message: textToRun, session_id: 'hedge-fund-terminal', user_id: 'demo-trader' })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Execution failed');
 
       setAuditResult(data);
+      if (data.customer_profile) {
+        setUserProfile(data.customer_profile);
+      }
       if (data.ticker) {
         setActiveSymbol(data.ticker.replace('.NS', ''));
       }
@@ -106,7 +123,13 @@ export default function AIHedgeFundTerminal() {
       ]);
     } finally {
       setLoading(false);
+      fetchMemoryProfile();
     }
+  };
+
+  const handleResetMemory = async () => {
+    await fetch('/api/user/memory/reset?user_id=demo-trader', { method: 'POST' });
+    fetchMemoryProfile();
   };
 
   return (
@@ -248,6 +271,7 @@ export default function AIHedgeFundTerminal() {
                       key={cIdx}
                       onClick={() => {
                         if (c.tickers) handleAudit(`Optimize portfolio for ${c.tickers.join(', ')} with 6.5% risk free rate`);
+                        else if (c.ticker) setActiveSymbol(c.ticker.replace('.NS', ''));
                       }}
                       style={{
                         background: 'rgba(56, 189, 248, 0.1)',
@@ -291,7 +315,7 @@ export default function AIHedgeFundTerminal() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Type command, stock tip, or creator query (e.g. Audit BUY TATAMOTORS @ 980 TGT 1050 SL 940)..."
+            placeholder="Type command, stock tip, or preference (e.g. 'I am an aggressive swing trader on Reliance')..."
             style={{
               flex: 1,
               background: 'transparent',
@@ -324,7 +348,7 @@ export default function AIHedgeFundTerminal() {
         </form>
       </div>
 
-      {/* RIGHT PANE: Live Ingestion Feed & Institutional Metrics */}
+      {/* RIGHT PANE: Customer Memory Profile & Live Radar */}
       <div style={{
         display: 'flex',
         flexDirection: 'column',
@@ -332,38 +356,65 @@ export default function AIHedgeFundTerminal() {
         height: '100%',
         overflowY: 'auto'
       }}>
-        {/* Knowledge & Calibration Stats */}
+        {/* Customer Memory & Behavioral Profile Card */}
         <div style={{
-          background: '#0a0f1a',
-          border: '1px solid #1a273e',
+          background: 'linear-gradient(145deg, #0e1526 0%, #080d19 100%)',
+          border: '1px solid #1a2b4a',
           borderRadius: '4px',
           padding: '16px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: '#f8fafc', letterSpacing: '0.04em' }}>
-              ALPHA AUDITOR STATUS
-            </span>
-            <span style={{ fontSize: '9px', background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', padding: '1px 5px', borderRadius: '2px', fontWeight: 700 }}>
-              ONLINE
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Brain size={16} color="#38bdf8" />
+              <span style={{ fontSize: '11px', fontWeight: 800, color: '#f8fafc', letterSpacing: '0.04em' }}>
+                CUSTOMER BEHAVIORAL MEMORY
+              </span>
+            </div>
+            <button
+              onClick={handleResetMemory}
+              title="Reset Customer Memory"
+              style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '2px' }}
+            >
+              <RotateCcw size={12} />
+            </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ background: '#05070c', border: '1px solid #141c2c', padding: '10px', borderRadius: '3px' }}>
-              <div style={{ fontSize: '9px', color: '#64748b' }}>TOTAL AUDITED CALLS</div>
-              <div style={{ fontSize: '16px', fontWeight: 800, color: '#f8fafc' }}>2,448</div>
+              <div style={{ fontSize: '9px', color: '#64748b' }}>IDENTIFIED RISK PROFILE</div>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: '#38bdf8', marginTop: '2px' }}>
+                {userProfile?.risk_profile || 'Moderate / Balanced Growth'}
+              </div>
             </div>
+
             <div style={{ background: '#05070c', border: '1px solid #141c2c', padding: '10px', borderRadius: '3px' }}>
-              <div style={{ fontSize: '9px', color: '#64748b' }}>TRACKED CREATORS</div>
-              <div style={{ fontSize: '16px', fontWeight: 800, color: '#38bdf8' }}>51 Desks</div>
+              <div style={{ fontSize: '9px', color: '#64748b' }}>PREFERRED TRADING STYLE</div>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: '#10b981', marginTop: '2px' }}>
+                {userProfile?.trading_style || 'Swing Breakout & Quality Delivery'}
+              </div>
             </div>
+
             <div style={{ background: '#05070c', border: '1px solid #141c2c', padding: '10px', borderRadius: '3px' }}>
-              <div style={{ fontSize: '9px', color: '#64748b' }}>YOUTUBE TRANSCRIPTS</div>
-              <div style={{ fontSize: '16px', fontWeight: 800, color: '#ef4444' }}>74 Videos</div>
-            </div>
-            <div style={{ background: '#05070c', border: '1px solid #141c2c', padding: '10px', borderRadius: '3px' }}>
-              <div style={{ fontSize: '9px', color: '#64748b' }}>G-EVAL RATING</div>
-              <div style={{ fontSize: '16px', fontWeight: 800, color: '#10b981' }}>4.9 / 5.0</div>
+              <div style={{ fontSize: '9px', color: '#64748b' }}>LEARNED FAVORITE TICKERS</div>
+              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
+                {(userProfile?.favorite_tickers || ['TATAMOTORS', 'RELIANCE', 'TCS']).map(t => (
+                  <span
+                    key={t}
+                    onClick={() => setActiveSymbol(t)}
+                    style={{
+                      fontSize: '10px',
+                      background: 'rgba(56, 189, 248, 0.1)',
+                      border: '1px solid rgba(56, 189, 248, 0.3)',
+                      color: '#38bdf8',
+                      padding: '2px 6px',
+                      borderRadius: '2px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         </div>

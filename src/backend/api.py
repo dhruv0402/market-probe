@@ -1910,6 +1910,7 @@ def get_evaluation_metrics():
 class FinBotChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = "marketprobe-session"
+    user_id: Optional[str] = "demo-trader"
 
 class FinBotOptimizeRequest(BaseModel):
     tickers: List[str] = ["RELIANCE", "TCS", "INFY", "HDFCBANK"]
@@ -1921,6 +1922,24 @@ class FinBotTaxHarvestRequest(BaseModel):
     unrealized_losses: float = 40000.0
     holding_period_days: int = 400
 
+@app.get("/api/user/memory/profile")
+async def get_user_memory_profile(user_id: str = "demo-trader"):
+    """Fetches learned customer behavioral profile & preferences."""
+    from src.quant.user_memory import get_customer_memory
+    mem = get_customer_memory()
+    return mem.get_or_create_profile(user_id)
+
+@app.post("/api/user/memory/reset")
+async def reset_user_memory(user_id: str = "demo-trader"):
+    """Resets learned memory for the user."""
+    from src.quant.user_memory import get_customer_memory
+    mem = get_customer_memory()
+    mem.update_profile_field(user_id, "favorite_tickers", ["TATAMOTORS", "RELIANCE", "TCS"])
+    mem.update_profile_field(user_id, "risk_profile", "Moderate / Balanced Growth")
+    mem.update_profile_field(user_id, "trading_style", "Swing Breakout & Quality Delivery")
+    mem.update_profile_field(user_id, "raw_memory_notes", [])
+    return {"status": "success", "message": "Customer memory profile refreshed"}
+
 @app.get("/api/finbot/status")
 async def get_finbot_status():
     """Verify in-process FinBot AI quantitative core status."""
@@ -1930,7 +1949,7 @@ async def get_finbot_status():
         "finbot_url": "embedded://marketprobe/quant",
         "status": {
             "status": "healthy",
-            "service": "Native FinBot AI Quantitative Core (Unified Single-Port)",
+            "service": "Native FinBot AI Quantitative Core with Persistent Customer Memory",
             "knowledge_vectors": 544,
             "models": ["gemini-3.5-flash", "gemini-3.5-flash-lite", "faiss-vector-rag"]
         }
@@ -1940,12 +1959,14 @@ async def get_finbot_status():
 async def handle_finbot_chat(req: FinBotChatRequest):
     """
     Direct in-process execution of FinBot Copilot:
+    - Persistent Customer Memory & Behavioral Pattern Recognition
     - Deep Quant Trade Audit (CoT + SHAP Factor Attribution)
     - YouTube Transcripts (74 videos) & 2,448 Audited Stock Calls
     - Multi-Node Failover Router & SEBI Compliance Guardrails
     """
     from src.quant.quant_engine import process_copilot_query
-    return await process_copilot_query(req.message)
+    uid = req.user_id or req.session_id or "demo-trader"
+    return await process_copilot_query(req.message, user_id=uid)
 
 @app.post("/api/finbot/optimize")
 async def handle_finbot_optimize(req: FinBotOptimizeRequest):
