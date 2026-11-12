@@ -1,479 +1,544 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Terminal, ShieldAlert, Cpu, Sparkles, TrendingUp, TrendingDown,
-  AlertCircle, RefreshCw, PlayCircle, BarChart3, Search, ArrowUpRight,
-  Sliders, ShieldCheck, Crosshair, Zap, FileText, CornerDownLeft, Eye, Award,
-  Brain, UserCheck, Heart, User, RotateCcw
+  ShieldAlert, CheckCircle2, TrendingUp, AlertTriangle, 
+  Terminal, Cpu, Database, Activity, RefreshCw, UploadCloud,
+  FileText, PlayCircle, BarChart2, Zap, ArrowRight, UserCheck
 } from 'lucide-react';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 
 export default function AIHedgeFundTerminal() {
-  const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [activeSymbol, setActiveSymbol] = useState('TATAMOTORS');
-  const [candleData, setCandleData] = useState([]);
+  const [activeTab, setActiveTab] = useState('council'); // 'council' | 'dropzone' | 'terminal'
+  const [ticker, setTicker] = useState('TATAMOTORS');
+  const [action, setAction] = useState('BUY');
+  const [entryPrice, setEntryPrice] = useState(940);
+  const [targetPrice, setTargetPrice] = useState(1050);
+  const [stoplossPrice, setStoplossPrice] = useState(890);
+  const [creatorName, setCreatorName] = useState('TradeWithTrend');
+  
+  // Drag and drop inputs
+  const [dragActive, setDragActive] = useState(false);
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [rawText, setRawText] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  
+  // States
+  const [isAuditing, setIsAuditing] = useState(false);
   const [auditResult, setAuditResult] = useState(null);
-  const [userProfile, setUserProfile] = useState(null);
-  const [history, setHistory] = useState([
-    {
-      timestamp: '09:15:02',
-      type: 'SYSTEM_BOOT',
-      text: 'Institutional Risk Engine initialized. Connected to 2,559 NSE equites universe, 2,448 historical calls, 74 YouTube audio transcripts, and Persistent Customer Memory.',
-      engine: 'kernel'
-    }
-  ]);
-  const [quickTips, setQuickTips] = useState([]);
-  const logEndRef = useRef(null);
+  const [memoryProfile, setMemoryProfile] = useState(null);
+  const [universeCount, setUniverseCount] = useState(2458);
 
-  // Fetch customer memory profile
-  const fetchMemoryProfile = () => {
-    fetch('/api/user/memory/profile?user_id=demo-trader')
-      .then(res => res.json())
-      .then(data => setUserProfile(data))
-      .catch(() => {});
+  const fileInputRef = useRef(null);
+
+  // Load User Memory Profile on load
+  const fetchMemory = async () => {
+    try {
+      const res = await fetch('/api/user/memory/profile?user_id=demo-trader');
+      if (res.ok) {
+        const data = await res.json();
+        setMemoryProfile(data);
+      }
+    } catch (e) {
+      console.error("Memory fetch error", e);
+    }
   };
 
   useEffect(() => {
-    fetchMemoryProfile();
+    fetchMemory();
+    runMultiAgentAudit();
   }, []);
 
-  // Fetch live candles for active symbol
-  useEffect(() => {
-    fetch(`/api/stock-candles?symbol=${activeSymbol}&period=1mo&interval=1d`)
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.candles) {
-          setCandleData(data.candles);
-        }
-      })
-      .catch(() => {});
-  }, [activeSymbol]);
-
-  // Fetch recent tips for quick click
-  useEffect(() => {
-    fetch('/api/home-feed')
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.recent_tips) {
-          setQuickTips(data.recent_tips.slice(0, 6));
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [history]);
-
-  const handleAudit = async (customPrompt = null) => {
-    const textToRun = (customPrompt || query).trim();
-    if (!textToRun || loading) return;
-
-    setQuery('');
-    setLoading(true);
-
-    const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
-    setHistory(prev => [
-      ...prev,
-      {
-        timestamp: timeStr,
-        type: 'INPUT_DISPATCH',
-        text: textToRun,
-        engine: 'trader'
-      }
-    ]);
-
+  // Run Council Audit
+  const runMultiAgentAudit = async () => {
+    setIsAuditing(true);
     try {
-      const res = await fetch('/api/finbot/chat', {
+      const res = await fetch('/api/multiagent/audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: textToRun, session_id: 'hedge-fund-terminal', user_id: 'demo-trader' })
+        body: JSON.stringify({
+          ticker,
+          action,
+          entry_price: parseFloat(entryPrice) || 0,
+          target_price: parseFloat(targetPrice) || 0,
+          stoploss_price: parseFloat(stoplossPrice) || 0,
+          creator_name: creatorName,
+          user_id: 'demo-trader'
+        })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Execution failed');
-
-      setAuditResult(data);
-      if (data.customer_profile) {
-        setUserProfile(data.customer_profile);
+      if (res.ok) {
+        const data = await res.json();
+        setAuditResult(data);
       }
-      if (data.ticker) {
-        setActiveSymbol(data.ticker.replace('.NS', ''));
-      }
-
-      setHistory(prev => [
-        ...prev,
-        {
-          timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-          type: 'QUANT_VERDICT',
-          data: data,
-          text: data.reply || data.response || JSON.stringify(data),
-          engine: data.source_node || 'gemini-3.5-flash-primary',
-          action_chips: data.action_chips || []
-        }
-      ]);
-    } catch (err) {
-      setHistory(prev => [
-        ...prev,
-        {
-          timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-          type: 'ERROR',
-          text: `Gatekeeper Alert: ${err.message}`,
-          engine: 'safety'
-        }
-      ]);
+    } catch (e) {
+      console.error('Audit failed', e);
     } finally {
-      setLoading(false);
-      fetchMemoryProfile();
+      setIsAuditing(false);
     }
   };
 
-  const handleResetMemory = async () => {
-    await fetch('/api/user/memory/reset?user_id=demo-trader', { method: 'POST' });
-    fetchMemoryProfile();
+  // Run Drag and Drop Ingestion Audit
+  const handleDropzoneSubmit = async (e) => {
+    e?.preventDefault();
+    setIsAuditing(true);
+    try {
+      const formData = new FormData();
+      if (selectedFile) formData.append('file', selectedFile);
+      if (youtubeUrl) formData.append('youtube_url', youtubeUrl);
+      if (rawText) formData.append('raw_text', rawText);
+      formData.append('creator_name', creatorName || 'Multimodal Dropzone');
+      formData.append('user_id', 'demo-trader');
+
+      const res = await fetch('/api/audit/drop', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setAuditResult(data);
+        if (data.ticker) setTicker(data.ticker);
+        if (data.entry) setEntryPrice(data.entry);
+        if (data.target) setTargetPrice(data.target);
+        if (data.stoploss) setStoplossPrice(data.stoploss);
+        setUniverseCount(prev => prev + 1);
+        setActiveTab('council');
+      }
+    } catch (err) {
+      console.error('Dropzone submission failed', err);
+    } finally {
+      setIsAuditing(false);
+    }
+  };
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true);
+    else if (e.type === 'dragleave') setDragActive(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      setSelectedFile(e.dataTransfer.files[0]);
+    }
   };
 
   return (
-    <div style={{
-      maxWidth: '1440px',
-      margin: '0 auto',
-      display: 'grid',
-      gridTemplateColumns: '1fr 420px',
-      gap: '16px',
-      height: 'calc(100vh - 125px)',
-      minHeight: '680px',
-      fontFamily: "'JetBrains Mono', 'IBM Plex Mono', monospace"
-    }}>
-      {/* LEFT PANE: Active Quant Chart & Execution Terminal */}
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '14px',
-        height: '100%',
-        overflow: 'hidden'
-      }}>
-        {/* Top Active Ticker Monitor */}
-        <div style={{
-          background: 'linear-gradient(145deg, #0f1728 0%, #080d18 100%)',
-          border: '1px solid #1a273e',
-          borderRadius: '4px',
-          padding: '16px 20px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between'
-        }}>
+    <div className="flex flex-col h-full bg-[#070a10] text-[#c9d1d9] font-sans antialiased overflow-hidden">
+      {/* Top Institutional Header */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-[#0d1117] border-b border-[#21262d]">
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center justify-center w-7 h-7 rounded bg-indigo-500/10 border border-indigo-500/30 text-indigo-400">
+            <Cpu className="w-4 h-4" />
+          </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '18px', fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.02em' }}>
-                NSE: {activeSymbol}
-              </span>
-              <span style={{ fontSize: '10px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '2px 6px', borderRadius: '2px', fontWeight: 700 }}>
-                CANDLESTICK TICKER
-              </span>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-bold tracking-wider text-slate-100 uppercase">MARKETPROBE</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300 font-mono border border-blue-700/50">MULTI-AGENT QUANT COUNCIL</span>
             </div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
-              1-Month Daily Candlestick Stream • Automatic NER Context Target
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {['TATAMOTORS', 'RELIANCE', 'TCS', 'HDFCBANK', 'INFY'].map(sym => (
-              <button
-                key={sym}
-                onClick={() => setActiveSymbol(sym)}
-                style={{
-                  background: activeSymbol === sym ? 'rgba(56, 189, 248, 0.2)' : '#070a11',
-                  border: `1px solid ${activeSymbol === sym ? '#38bdf8' : '#1e293b'}`,
-                  color: activeSymbol === sym ? '#f8fafc' : '#94a3b8',
-                  padding: '4px 10px',
-                  borderRadius: '3px',
-                  fontSize: '11px',
-                  cursor: 'pointer',
-                  fontWeight: 600
-                }}
-              >
-                {sym}
-              </button>
-            ))}
+            <div className="text-[10px] text-slate-400 font-mono">5 Specialized Engines • 1,000-Path Monte Carlo • Empirical Bayes • Wilson CI</div>
           </div>
         </div>
 
-        {/* Lightweight Candlestick / Area Chart View */}
-        <div style={{
-          background: '#070a11',
-          border: '1px solid #1a273e',
-          borderRadius: '4px',
-          padding: '12px',
-          height: '240px',
-          position: 'relative'
-        }}>
-          <div style={{ position: 'absolute', top: '12px', left: '16px', fontSize: '10px', color: '#64748b', zIndex: 1 }}>
-            HISTORICAL OHLC CLOSE VOLATILITY
+        {/* Global Metric Badges */}
+        <div className="flex items-center space-x-4 text-xs font-mono">
+          <div className="flex items-center space-x-1.5 text-emerald-400 bg-emerald-950/30 px-2 py-1 rounded border border-emerald-800/40">
+            <Database className="w-3.5 h-3.5" />
+            <span>Audited Universe: <b className="text-white">{universeCount} Calls</b></span>
           </div>
-          {candleData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={candleData}>
-                <defs>
-                  <linearGradient id="chartGlow" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.35}/>
-                    <stop offset="95%" stopColor="#38bdf8" stopOpacity={0.0}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="date" stroke="#334155" tick={{ fontSize: 10, fill: '#64748b' }} />
-                <YAxis domain={['auto', 'auto']} stroke="#334155" tick={{ fontSize: 10, fill: '#64748b' }} orientation="right" />
-                <Tooltip contentStyle={{ background: '#0b111e', border: '1px solid #1e293b', fontSize: '11px', color: '#f8fafc' }} />
-                <Area type="monotone" dataKey="close" stroke="#38bdf8" strokeWidth={2} fillOpacity={1} fill="url(#chartGlow)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b', fontSize: '12px' }}>
-              Fetching real-time exchange candles for {activeSymbol}...
-            </div>
-          )}
+          <div className="flex items-center space-x-1.5 text-cyan-400 bg-cyan-950/30 px-2 py-1 rounded border border-cyan-800/40">
+            <Activity className="w-3.5 h-3.5" />
+            <span>Engine: <b className="text-white">Redis + In-Process</b></span>
+          </div>
         </div>
-
-        {/* Console Log Feed */}
-        <div style={{
-          flex: 1,
-          background: '#05070c',
-          border: '1px solid #1a273e',
-          borderRadius: '4px',
-          padding: '16px',
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '14px'
-        }}>
-          {history.map((h, i) => (
-            <div key={i} style={{ borderBottom: '1px solid #0f1726', paddingBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                <span style={{ fontSize: '10px', color: '#64748b' }}>[{h.timestamp}]</span>
-                <span style={{
-                  fontSize: '9px',
-                  padding: '1px 5px',
-                  borderRadius: '2px',
-                  fontWeight: 700,
-                  background: h.type === 'INPUT_DISPATCH' ? '#1e293b' : h.type === 'QUANT_VERDICT' ? 'rgba(56, 189, 248, 0.15)' : '#0f172a',
-                  color: h.type === 'INPUT_DISPATCH' ? '#e2e8f0' : h.type === 'QUANT_VERDICT' ? '#38bdf8' : '#10b981'
-                }}>
-                  {h.type}
-                </span>
-                <span style={{ fontSize: '10px', color: '#38bdf8' }}>via {h.engine}</span>
-              </div>
-
-              <div style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                {h.text}
-              </div>
-
-              {h.action_chips && h.action_chips.length > 0 && (
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
-                  {h.action_chips.map((c, cIdx) => (
-                    <button
-                      key={cIdx}
-                      onClick={() => {
-                        if (c.tickers) handleAudit(`Optimize portfolio for ${c.tickers.join(', ')} with 6.5% risk free rate`);
-                        else if (c.ticker) setActiveSymbol(c.ticker.replace('.NS', ''));
-                      }}
-                      style={{
-                        background: 'rgba(56, 189, 248, 0.1)',
-                        border: '1px solid rgba(56, 189, 248, 0.3)',
-                        color: '#38bdf8',
-                        padding: '4px 8px',
-                        borderRadius: '3px',
-                        fontSize: '10px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <ArrowUpRight size={11} /> {c.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-          {loading && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#38bdf8', fontSize: '11px' }}>
-              <RefreshCw size={13} className="spin" /> Executing multi-step Bayesian conviction trace & YouTube transcript cross-check...
-            </div>
-          )}
-          <div ref={logEndRef} />
-        </div>
-
-        {/* Command Line Input Bar */}
-        <form onSubmit={(e) => { e.preventDefault(); handleAudit(); }} style={{
-          display: 'flex',
-          gap: '8px',
-          background: '#0b111e',
-          border: '1px solid #1a273e',
-          borderRadius: '4px',
-          padding: '10px 14px'
-        }}>
-          <span style={{ color: '#38bdf8', fontWeight: 800 }}>&gt;</span>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Type command, stock tip, or preference (e.g. 'I am an aggressive swing trader on Reliance')..."
-            style={{
-              flex: 1,
-              background: 'transparent',
-              border: 'none',
-              outline: 'none',
-              color: '#f8fafc',
-              fontSize: '12px',
-              fontFamily: 'inherit'
-            }}
-          />
-          <button
-            type="submit"
-            disabled={loading || !query.trim()}
-            style={{
-              background: '#0284c7',
-              border: 'none',
-              borderRadius: '3px',
-              padding: '0 16px',
-              color: '#ffffff',
-              fontSize: '11px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}
-          >
-            EXECUTE <CornerDownLeft size={12} />
-          </button>
-        </form>
       </div>
 
-      {/* RIGHT PANE: Customer Memory Profile & Live Radar */}
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '14px',
-        height: '100%',
-        overflowY: 'auto'
-      }}>
-        {/* Customer Memory & Behavioral Profile Card */}
-        <div style={{
-          background: 'linear-gradient(145deg, #0e1526 0%, #080d19 100%)',
-          border: '1px solid #1a2b4a',
-          borderRadius: '4px',
-          padding: '16px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Brain size={16} color="#38bdf8" />
-              <span style={{ fontSize: '11px', fontWeight: 800, color: '#f8fafc', letterSpacing: '0.04em' }}>
-                CUSTOMER BEHAVIORAL MEMORY
-              </span>
-            </div>
+      {/* Navigation Sub-bar */}
+      <div className="flex items-center justify-between px-4 py-1.5 bg-[#161b22] border-b border-[#21262d] text-xs">
+        <div className="flex space-x-2">
+          <button
+            onClick={() => setActiveTab('council')}
+            className={`px-3 py-1 rounded text-xs font-mono transition-colors ${
+              activeTab === 'council' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            🏛️ CIO Deliberation Council
+          </button>
+          <button
+            onClick={() => setActiveTab('dropzone')}
+            className={`px-3 py-1 rounded text-xs font-mono transition-colors flex items-center space-x-1 ${
+              activeTab === 'dropzone' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <UploadCloud className="w-3.5 h-3.5 mr-1" />
+            <span>📥 Drag & Drop Multimodal Ingestion</span>
+          </button>
+        </div>
+
+        {/* Dynamic Quick Tickers */}
+        <div className="flex items-center space-x-1 text-[11px] font-mono text-slate-400">
+          <span>Quick Select:</span>
+          {['TATAMOTORS', 'RELIANCE', 'INFY', 'HDFCBANK', 'BHARTIARTL'].map((sym) => (
             <button
-              onClick={handleResetMemory}
-              title="Reset Customer Memory"
-              style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '2px' }}
+              key={sym}
+              onClick={() => { setTicker(sym); runMultiAgentAudit(); }}
+              className="px-1.5 py-0.5 rounded bg-[#21262d] hover:bg-slate-700 text-slate-300"
             >
-              <RotateCcw size={12} />
+              {sym}
             </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Workspace Body */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Side: Controls & Input Parameters */}
+        <div className="w-80 bg-[#0d1117] border-r border-[#21262d] p-3 flex flex-col justify-between overflow-y-auto">
+          <div className="space-y-3">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+              Setup Audit Parameters
+            </div>
+
+            <div>
+              <label className="text-[10px] text-slate-400 uppercase font-mono">NSE Ticker</label>
+              <input
+                type="text"
+                value={ticker}
+                onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                className="w-full bg-[#161b22] border border-[#30363d] rounded px-2.5 py-1.5 text-xs text-white font-mono focus:border-indigo-500 outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-slate-400 uppercase font-mono">Action</label>
+                <select
+                  value={action}
+                  onChange={(e) => setAction(e.target.value)}
+                  className="w-full bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-xs text-white font-mono outline-none"
+                >
+                  <option value="BUY">BUY (LONG)</option>
+                  <option value="SELL">SELL (SHORT)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-400 uppercase font-mono">Creator / Desk</label>
+                <input
+                  type="text"
+                  value={creatorName}
+                  onChange={(e) => setCreatorName(e.target.value)}
+                  placeholder="e.g. ICICI Direct"
+                  className="w-full bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-xs text-white font-mono outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5">
+              <div>
+                <label className="text-[9px] text-slate-400 uppercase font-mono">Entry (₹)</label>
+                <input
+                  type="number"
+                  value={entryPrice}
+                  onChange={(e) => setEntryPrice(e.target.value)}
+                  className="w-full bg-[#161b22] border border-[#30363d] rounded px-1.5 py-1.5 text-xs text-white font-mono outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] text-slate-400 uppercase font-mono">Target (₹)</label>
+                <input
+                  type="number"
+                  value={targetPrice}
+                  onChange={(e) => setTargetPrice(e.target.value)}
+                  className="w-full bg-[#161b22] border border-[#30363d] rounded px-1.5 py-1.5 text-xs text-emerald-400 font-mono outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] text-slate-400 uppercase font-mono">Stop-Loss (₹)</label>
+                <input
+                  type="number"
+                  value={stoplossPrice}
+                  onChange={(e) => setStoplossPrice(e.target.value)}
+                  className="w-full bg-[#161b22] border border-[#30363d] rounded px-1.5 py-1.5 text-xs text-rose-400 font-mono outline-none"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={runMultiAgentAudit}
+              disabled={isAuditing}
+              className="w-full mt-2 py-2 px-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded font-mono text-xs font-semibold flex items-center justify-center space-x-1.5 shadow"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isAuditing ? 'animate-spin' : ''}`} />
+              <span>{isAuditing ? 'Council Deliberating...' : 'Trigger Multi-Agent Audit'}</span>
+            </button>
+
+            {/* Customer Memory Behavioral Profile Widget */}
+            <div className="mt-4 p-2.5 rounded bg-[#161b22] border border-[#30363d] space-y-2">
+              <div className="flex items-center justify-between text-[11px] text-slate-300 font-mono">
+                <span className="flex items-center space-x-1 text-purple-400">
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <b>Customer Memory Profile</b>
+                </span>
+                <span className="text-[9px] px-1 py-0.5 rounded bg-purple-950/60 text-purple-300 border border-purple-800/40">Active</span>
+              </div>
+              <div className="text-[10px] space-y-1 font-mono text-slate-400">
+                <div className="flex justify-between">
+                  <span>Learned Style:</span>
+                  <span className="text-white font-semibold">{memoryProfile?.risk_profile || 'AGGRESSIVE'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Max Stress Loss:</span>
+                  <span className="text-rose-400 font-semibold">{memoryProfile?.max_portfolio_loss_pct || 25}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Favorite Tickers:</span>
+                  <span className="text-cyan-300 truncate max-w-[120px]">{memoryProfile?.favorite_tickers || 'TATAMOTORS, RELIANCE'}</span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ background: '#05070c', border: '1px solid #141c2c', padding: '10px', borderRadius: '3px' }}>
-              <div style={{ fontSize: '9px', color: '#64748b' }}>IDENTIFIED RISK PROFILE</div>
-              <div style={{ fontSize: '13px', fontWeight: 800, color: '#38bdf8', marginTop: '2px' }}>
-                {userProfile?.risk_profile || 'Moderate / Balanced Growth'}
-              </div>
-            </div>
-
-            <div style={{ background: '#05070c', border: '1px solid #141c2c', padding: '10px', borderRadius: '3px' }}>
-              <div style={{ fontSize: '9px', color: '#64748b' }}>PREFERRED TRADING STYLE</div>
-              <div style={{ fontSize: '12px', fontWeight: 700, color: '#10b981', marginTop: '2px' }}>
-                {userProfile?.trading_style || 'Swing Breakout & Quality Delivery'}
-              </div>
-            </div>
-
-            <div style={{ background: '#05070c', border: '1px solid #141c2c', padding: '10px', borderRadius: '3px' }}>
-              <div style={{ fontSize: '9px', color: '#64748b' }}>LEARNED FAVORITE TICKERS</div>
-              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
-                {(userProfile?.favorite_tickers || ['TATAMOTORS', 'RELIANCE', 'TCS']).map(t => (
-                  <span
-                    key={t}
-                    onClick={() => setActiveSymbol(t)}
-                    style={{
-                      fontSize: '10px',
-                      background: 'rgba(56, 189, 248, 0.1)',
-                      border: '1px solid rgba(56, 189, 248, 0.3)',
-                      color: '#38bdf8',
-                      padding: '2px 6px',
-                      borderRadius: '2px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {t}
-                  </span>
-                ))}
-              </div>
-            </div>
+          <div className="text-[9px] text-slate-500 font-mono border-t border-[#21262d] pt-2">
+            Statutory SEBI Disclaimer: Mathematical simulation for forensic verification purposes only. Not registered investment advice.
           </div>
         </div>
 
-        {/* Live Tips Ingestion Feed */}
-        <div style={{
-          flex: 1,
-          background: '#0a0f1a',
-          border: '1px solid #1a273e',
-          borderRadius: '4px',
-          padding: '16px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '10px',
-          overflowY: 'auto'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: '#f8fafc' }}>
-              RECENT INGESTED CALLS
-            </span>
-            <span style={{ fontSize: '9px', color: '#64748b' }}>CLICK TO AUDIT</span>
-          </div>
+        {/* Center / Right Content Area */}
+        <div className="flex-1 flex flex-col bg-[#070a10] overflow-y-auto p-4">
+          {activeTab === 'dropzone' ? (
+            /* Drag and Drop Multimodal Ingestion View */
+            <div className="max-w-3xl mx-auto w-full space-y-4">
+              <div className="border border-indigo-500/30 rounded-lg p-4 bg-indigo-950/10">
+                <h2 className="text-sm font-bold text-white uppercase font-mono flex items-center space-x-2">
+                  <UploadCloud className="w-4 h-4 text-indigo-400" />
+                  <span>Multimodal Forensic Ingestion Gateway</span>
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Bypass fragile background crawlers. Directly drop analyst research reports (PDF), YouTube links, or audio clips. 
+                  MarketProbe will extract the trade geometry, commit it to the empirical ledger, and run the 5-Agent Council.
+                </p>
+              </div>
 
-          {quickTips.map((tip, idx) => (
-            <div
-              key={idx}
-              onClick={() => handleAudit(`Audit trade: ${tip.action} ${tip.ticker} @ ${tip.entry_price} TGT ${tip.target_price} SL ${tip.stoploss_price} by ${tip.creator || 'Desk'}`)}
-              style={{
-                background: '#05070c',
-                border: '1px solid #141c2c',
-                padding: '10px',
-                borderRadius: '3px',
-                cursor: 'pointer',
-                transition: 'border 0.15s ease'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.borderColor = '#38bdf8'}
-              onMouseLeave={(e) => e.currentTarget.style.borderColor = '#141c2c'}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#f8fafc' }}>{tip.ticker}</span>
-                <span style={{
-                  fontSize: '9px',
-                  fontWeight: 700,
-                  color: tip.action === 'BUY' ? '#10b981' : '#ef4444',
-                  background: tip.action === 'BUY' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                  padding: '1px 5px',
-                  borderRadius: '2px'
-                }}>
-                  {tip.action}
+              {/* Drag and Drop Zone */}
+              <div
+                onDragEnter={handleDrag}
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer transition-colors ${
+                  dragActive ? 'border-indigo-500 bg-indigo-950/20' : 'border-[#30363d] hover:border-slate-500 bg-[#0d1117]'
+                }`}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.txt,.mp3,.mp4"
+                  className="hidden"
+                  onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])}
+                />
+                <FileText className="w-8 h-8 text-slate-400 mb-2" />
+                <span className="text-xs font-mono text-slate-200 font-semibold">
+                  {selectedFile ? `Selected: ${selectedFile.name}` : 'Drop PDF Research Report or Media File Here'}
                 </span>
+                <span className="text-[10px] text-slate-500 mt-1 font-mono">Supports Motilal Oswal / ICICI Direct PDFs, text files, or audio</span>
               </div>
-              <div style={{ fontSize: '10px', color: '#94a3b8' }}>
-                Entry: ₹{tip.entry_price} • Tgt: ₹{tip.target_price} • SL: ₹{tip.stoploss_price}
+
+              {/* YouTube Link Drop Input */}
+              <div className="bg-[#0d1117] p-3 rounded-lg border border-[#21262d] space-y-2">
+                <label className="text-[11px] font-mono text-slate-300 flex items-center space-x-1.5">
+                  <PlayCircle className="w-4 h-4 text-red-400" />
+                  <span>Or Drop Financial YouTube Video URL:</span>
+                </label>
+                <input
+                  type="text"
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  className="w-full bg-[#161b22] border border-[#30363d] rounded px-3 py-2 text-xs text-white font-mono outline-none focus:border-indigo-500"
+                />
               </div>
-              <div style={{ fontSize: '9px', color: '#64748b', marginTop: '3px' }}>
-                Creator: {tip.creator || 'Research Analyst'}
+
+              {/* Raw Text Tip Drop */}
+              <div className="bg-[#0d1117] p-3 rounded-lg border border-[#21262d] space-y-2">
+                <label className="text-[11px] font-mono text-slate-300">Or Paste Raw WhatsApp / Telegram Recommendation:</label>
+                <textarea
+                  rows={3}
+                  value={rawText}
+                  onChange={(e) => setRawText(e.target.value)}
+                  placeholder="e.g. Buy TATAMOTORS around 940 rupees with strict stoploss at 910 and ambitious target of 1020..."
+                  className="w-full bg-[#161b22] border border-[#30363d] rounded px-3 py-2 text-xs text-white font-mono outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <button
+                onClick={handleDropzoneSubmit}
+                disabled={isAuditing || (!selectedFile && !youtubeUrl && !rawText)}
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center space-x-2"
+              >
+                <span>{isAuditing ? 'Ingesting & Auditing...' : '🚀 Ingest and Audit via Council'}</span>
+              </button>
+            </div>
+          ) : (
+            /* Multi-Agent Council Deliberation View */
+            <div className="space-y-4">
+              {/* Executive CIO Consensus Banner */}
+              {auditResult && (
+                <div className={`p-4 rounded-lg border ${
+                  auditResult.council_verdict === 'HIGH_CONVICTION_EXECUTE' ? 'bg-emerald-950/20 border-emerald-500/40 text-emerald-200' :
+                  auditResult.council_verdict === 'INSTITUTIONAL_VETO' ? 'bg-rose-950/20 border-rose-500/40 text-rose-200' :
+                  'bg-amber-950/20 border-amber-500/40 text-amber-200'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      {auditResult.council_verdict === 'HIGH_CONVICTION_EXECUTE' ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <ShieldAlert className="w-5 h-5 text-rose-400" />}
+                      <span className="text-sm font-bold font-mono uppercase tracking-wide">
+                        CIO Verdict: {auditResult.council_verdict}
+                      </span>
+                    </div>
+                    <div className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-black/40 border border-current">
+                      Conviction Score: {auditResult.composite_conviction_score} / 100
+                    </div>
+                  </div>
+                  <p className="text-xs font-mono mt-2 text-slate-300">
+                    {auditResult.executive_summary}
+                  </p>
+                </div>
+              )}
+
+              {/* 4 Agent Grid Cards */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Agent 1: Quant Math */}
+                <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-mono border-b border-[#21262d] pb-1.5">
+                    <span className="font-bold text-blue-400 flex items-center space-x-1">
+                      <BarChart2 className="w-3.5 h-3.5" />
+                      <span>Quantitative Math Agent</span>
+                    </span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                      auditResult?.quant_math?.vote === 'BULLISH' ? 'bg-emerald-950 text-emerald-300 border border-emerald-700' : 'bg-rose-950 text-rose-300 border border-rose-700'
+                    }`}>
+                      {auditResult?.quant_math?.vote || 'SIMULATING'}
+                    </span>
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-300">
+                    {auditResult?.quant_math?.verdict_rationale}
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 pt-1 text-[10px] font-mono text-slate-400">
+                    <div className="bg-[#161b22] p-1.5 rounded">
+                      <div>Target Prob:</div>
+                      <b className="text-emerald-400">{((auditResult?.quant_math?.monte_carlo?.p_target_first || 0) * 100).toFixed(1)}%</b>
+                    </div>
+                    <div className="bg-[#161b22] p-1.5 rounded">
+                      <div>SL Hit Prob:</div>
+                      <b className="text-rose-400">{((auditResult?.quant_math?.monte_carlo?.p_stoploss_first || 0) * 100).toFixed(1)}%</b>
+                    </div>
+                    <div className="bg-[#161b22] p-1.5 rounded">
+                      <div>Expected Value:</div>
+                      <b className="text-cyan-400">{auditResult?.quant_math?.monte_carlo?.expected_return_pct}%</b>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Agent 2: Forensic Track Record */}
+                <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-mono border-b border-[#21262d] pb-1.5">
+                    <span className="font-bold text-amber-400 flex items-center space-x-1">
+                      <Cpu className="w-3.5 h-3.5" />
+                      <span>Forensic Track-Record Agent</span>
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-amber-950 text-amber-300 border border-amber-700">
+                      {auditResult?.forensic_audit?.vote || 'LOOKUP'}
+                    </span>
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-300">
+                    {auditResult?.forensic_audit?.verdict_rationale}
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 pt-1 text-[10px] font-mono text-slate-400">
+                    <div className="bg-[#161b22] p-1.5 rounded">
+                      <div>Bayes Hit Rate:</div>
+                      <b className="text-amber-400">{auditResult?.forensic_audit?.bayes_shrinkage_rate}%</b>
+                    </div>
+                    <div className="bg-[#161b22] p-1.5 rounded">
+                      <div>Wilson 95% CI:</div>
+                      <b className="text-white">[{auditResult?.forensic_audit?.wilson_95_ci?.lower}% - {auditResult?.forensic_audit?.wilson_95_ci?.upper}%]</b>
+                    </div>
+                    <div className="bg-[#161b22] p-1.5 rounded">
+                      <div>Audited Calls:</div>
+                      <b className="text-cyan-400">{auditResult?.forensic_audit?.sample_size}</b>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Agent 3: Risk & Customer Memory */}
+                <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-mono border-b border-[#21262d] pb-1.5">
+                    <span className="font-bold text-purple-400 flex items-center space-x-1">
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                      <span>Risk & Customer Memory</span>
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-purple-950 text-purple-300 border border-purple-700">
+                      {auditResult?.risk_memory?.vote || 'DEFENDING'}
+                    </span>
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-300">
+                    {auditResult?.risk_memory?.verdict_rationale}
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 pt-1 text-[10px] font-mono text-slate-400">
+                    <div className="bg-[#161b22] p-1.5 rounded">
+                      <div>Stress Downside:</div>
+                      <b className="text-rose-400">{auditResult?.risk_memory?.stress_tested_loss_pct}%</b>
+                    </div>
+                    <div className="bg-[#161b22] p-1.5 rounded">
+                      <div>Max Allowed:</div>
+                      <b className="text-white">{auditResult?.risk_memory?.user_max_loss_limit_pct}%</b>
+                    </div>
+                    <div className="bg-[#161b22] p-1.5 rounded">
+                      <div>Safe Allocation:</div>
+                      <b className="text-emerald-400">{auditResult?.risk_memory?.optimal_allocation_pct}%</b>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Agent 4: SEBI Compliance */}
+                <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-mono border-b border-[#21262d] pb-1.5">
+                    <span className="font-bold text-emerald-400 flex items-center space-x-1">
+                      <Zap className="w-3.5 h-3.5" />
+                      <span>Regulatory Guardrails</span>
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-emerald-950 text-emerald-300 border border-emerald-700">
+                      {auditResult?.sebi_guard?.vote || 'COMPLIANT'}
+                    </span>
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-300">
+                    {auditResult?.sebi_guard?.verdict_rationale}
+                  </div>
+                  <div className="bg-[#161b22] p-2 rounded text-[10px] font-mono text-slate-400">
+                    Statutory Status: <b>SEBI Standard Disclaimers Validated</b> • Circuit Filter: <b>Normal & Liquid</b>
+                  </div>
+                </div>
+              </div>
+
+              {/* Council Deliberation Trace Log */}
+              <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3 space-y-2">
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center space-x-1.5">
+                  <Terminal className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Executive Council Dialogue Trace</span>
+                </div>
+                <div className="space-y-1.5 text-xs font-mono">
+                  {auditResult?.dialogue_trace?.map((trace, idx) => (
+                    <div key={idx} className="flex items-start space-x-2 bg-[#161b22] p-2 rounded border border-[#21262d]">
+                      <span className="text-indigo-400 font-bold shrink-0">[{trace.agent}]:</span>
+                      <span className="text-slate-200">{trace.statement}</span>
+                      <span className="ml-auto text-[10px] font-bold text-slate-500 shrink-0">Score: {trace.score}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          ))}
+          )}
         </div>
       </div>
     </div>

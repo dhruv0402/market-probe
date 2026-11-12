@@ -1985,6 +1985,138 @@ async def handle_finbot_tax_harvest(req: FinBotTaxHarvestRequest):
     )
 
 # -------------------------------------------------------------------------
+# Multi-Agent Council & Drag-and-Drop Ingestion Endpoints
+# -------------------------------------------------------------------------
+from fastapi import UploadFile, File, Form
+from pydantic import BaseModel
+from typing import Optional
+
+class MultiAgentAuditRequest(BaseModel):
+    ticker: str
+    action: str = "BUY"
+    entry_price: float = 0.0
+    target_price: float = 0.0
+    stoploss_price: float = 0.0
+    creator_name: str = ""
+    user_id: str = "demo-trader"
+    horizon_days: int = 30
+
+@app.post("/api/multiagent/audit")
+async def handle_multiagent_audit(req: MultiAgentAuditRequest):
+    """
+    Executes Council of 5 Specialized Agents:
+    - Quant Math: 1,000-Path Monte Carlo GBM & Expected Value
+    - Forensic Auditor: Empirical Bayes & Wilson 95% Confidence Intervals
+    - Risk & Customer Memory: CVaR (95%) & Persistent Profile Constraints
+    - SEBI Compliance: Circuit Filters & Pump Guards
+    - CIO Consensus: Bayesian deliberative synthesis
+    """
+    from src.quant.multiagent.cio_orchestrator import run_cio_council_deliberation
+    return run_cio_council_deliberation(
+        ticker=req.ticker,
+        action=req.action,
+        entry_price=req.entry_price,
+        target_price=req.target_price,
+        stoploss_price=req.stoploss_price,
+        creator_name=req.creator_name,
+        user_id=req.user_id,
+        horizon_days=req.horizon_days
+    )
+
+@app.post("/api/audit/drop")
+async def handle_drag_and_drop_audit(
+    file: Optional[UploadFile] = File(None),
+    youtube_url: Optional[str] = Form(None),
+    raw_text: Optional[str] = Form(None),
+    creator_name: Optional[str] = Form("External Dropzone"),
+    user_id: Optional[str] = Form("demo-trader")
+):
+    """
+    Multimodal Drag-and-Drop Ingestion Gateway:
+    Supports PDF reports, YouTube URLs, Audio/Video files, and plain text tips.
+    Extracts structured trade matrix, logs it permanently to SQLite, and runs Multi-Agent Deliberation.
+    """
+    from src.quant.multiagent.perception_agent import (
+        extract_youtube_video_id, fetch_youtube_transcript,
+        parse_pdf_document, parse_trade_entities_from_text,
+        commit_new_recommendation_to_db
+    )
+    from src.quant.multiagent.cio_orchestrator import run_cio_council_deliberation
+
+    extracted_content = ""
+    source_type = "TEXT_DROP"
+    source_ref = "Direct Input"
+
+    if youtube_url and youtube_url.strip():
+        source_type = "YOUTUBE"
+        source_ref = youtube_url.strip()
+        vid = extract_youtube_video_id(youtube_url.strip())
+        if vid:
+            extracted_content = fetch_youtube_transcript(vid)
+        else:
+            extracted_content = f"Could not parse YouTube ID from {youtube_url}"
+    elif file is not None:
+        source_type = "FILE_UPLOAD"
+        source_ref = file.filename
+        content_bytes = await file.read()
+        if file.filename.lower().endswith(".pdf"):
+            import io
+            extracted_content = parse_pdf_document(io.BytesIO(content_bytes))
+        else:
+            try:
+                extracted_content = content_bytes.decode("utf-8", errors="ignore")
+            except Exception:
+                extracted_content = f"Binary media received: {file.filename}"
+    elif raw_text and raw_text.strip():
+        extracted_content = raw_text.strip()
+    else:
+        return {"error": "No valid source provided. Upload a PDF/video, provide a YouTube URL, or paste text."}
+
+    # Extract structured trade parameters
+    parsed = parse_trade_entities_from_text(extracted_content)
+
+    # Commit to DB (expanding data universe)
+    rec_id = commit_new_recommendation_to_db(
+        ticker=parsed["ticker"],
+        action=parsed["action"],
+        entry=parsed["entry"],
+        target=parsed["target"],
+        stoploss=parsed["stoploss"],
+        source_type=source_type,
+        source_url=source_ref,
+        raw_quote=extracted_content[:300],
+        creator_name=creator_name or "Dropzone Ingestion"
+    )
+
+    # Deliberate via Multi-Agent Council
+    council_result = run_cio_council_deliberation(
+        ticker=parsed["ticker"],
+        action=parsed["action"],
+        entry_price=parsed["entry"],
+        target_price=parsed["target"],
+        stoploss_price=parsed["stoploss"],
+        creator_name=creator_name,
+        user_id=user_id or "demo-trader"
+    )
+
+    council_result["ingestion_meta"] = {
+        "recommendation_id": rec_id,
+        "source_type": source_type,
+        "source_ref": source_ref,
+        "text_preview": extracted_content[:200] + "..." if len(extracted_content) > 200 else extracted_content
+    }
+
+    return council_result
+
+@app.on_event("startup")
+async def start_background_workers():
+    """Starts background ingestion loop and verifies Redis connection."""
+    import asyncio
+    from src.quant.background_scheduler import run_continuous_ingestion_loop
+    asyncio.create_task(run_continuous_ingestion_loop(interval_seconds=3600))
+    print("🚀 Background Multi-Agent Ingestion Scheduler initialized.")
+
+# -------------------------------------------------------------------------
 # Static Frontend Serving for Single-Container Docker / Cloud Deployment
 # -------------------------------------------------------------------------
 from fastapi.staticfiles import StaticFiles
