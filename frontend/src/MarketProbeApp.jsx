@@ -39,7 +39,7 @@ const inr = (n) => (n == null ? '—' : '₹' + fmt(n));
 
 const TABS = [
   { id: 'FEED', label: 'Feed', icon: Rss },
-  { id: 'TERMINAL', label: 'AI Quant Desk (Terminal)', icon: Terminal },
+  { id: 'TERMINAL', label: 'AI Quant Desk (Terminal)', icon: Activity },
   { id: 'FINBOT', label: 'FinBot Knowledge Hub', icon: Sparkles },
   { id: 'WATCHLIST', label: 'My Watchlist', icon: Bookmark },
   { id: 'STOCKS', label: 'Stocks & Sectors', icon: Layers },
