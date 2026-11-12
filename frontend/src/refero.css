@@ -1,0 +1,133 @@
+/* Refero Design System & Institutional Quant Stylesheet */
+
+@layer base {
+  :root {
+    --canvas: #06090e;
+    --panel: #0b0f17;
+    --cell: #111722;
+    --border: #1b2434;
+    --border-subtle: #141b27;
+    --emerald: #10b981;
+    --cyan: #38bdf8;
+    --rose: #f43f5e;
+    --amber: #f59e0b;
+    --purple: #8b5cf6;
+    --text-primary: #f0f6fc;
+    --text-secondary: #8b949e;
+    --text-muted: #545d68;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-sans: 'Inter', system-ui, sans-serif;
+  }
+}
+
+/* Base resets & typography */
+body {
+  background-color: var(--canvas);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Strict Monospace numerical data alignment */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+
+/* Micro controls and borders */
+.quant-border {
+  border: 1px solid var(--border);
+}
+
+.quant-border-subtle {
+  border: 1px solid var(--border-subtle);
+}
+
+/* High contrast primary execute action */
+.btn-quant-primary {
+  background-color: var(--emerald);
+  color: #06090e;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border-radius: 3px;
+  padding: 4px 10px;
+  transition: all 0.15s ease-in-out;
+  border: none;
+  cursor: pointer;
+}
+.btn-quant-primary:hover {
+  filter: brightness(1.1);
+}
+.btn-quant-primary:active {
+  transform: scale(0.98);
+}
+
+/* Secondary tool button */
+.btn-quant-tool {
+  background-color: var(--cell);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  border-radius: 3px;
+  padding: 3px 8px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.btn-quant-tool:hover {
+  background-color: var(--border);
+}
+
+/* Monospace inputs */
+.quant-input {
+  background-color: var(--canvas);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border-radius: 3px;
+  padding: 4px 8px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.quant-input:focus {
+  border-color: var(--cyan);
+}
+
+/* Status chips */
+.chip-bullish {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 2px;
+}
+
+.chip-bearish {
+  background: rgba(244, 63, 94, 0.12);
+  color: #fb7185;
+  border: 1px solid rgba(244, 63, 94, 0.35);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 2px;
+}
+
+.chip-amber {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 2px;
+}
