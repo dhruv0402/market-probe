@@ -4,6 +4,9 @@ import {
   Terminal, Cpu, Database, Activity, RefreshCw, UploadCloud,
   FileText, PlayCircle, BarChart2, Zap, ArrowRight, UserCheck
 } from 'lucide-react';
+import { 
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine 
+} from 'recharts';
 
 export default function AIHedgeFundTerminal() {
   const [activeTab, setActiveTab] = useState('council'); // 'council' | 'dropzone' | 'terminal'
@@ -520,6 +523,58 @@ export default function AIHedgeFundTerminal() {
                   </div>
                 </div>
               </div>
+
+              {/* Monte Carlo 1,000-Path Volatility Fan Chart */}
+              {auditResult?.quant_math?.monte_carlo?.path_sample_cone && (
+                <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="font-bold text-slate-300 flex items-center space-x-1.5">
+                      <TrendingUp className="w-4 h-4 text-cyan-400" />
+                      <span>1,000-Path Monte Carlo Geometric Brownian Motion Trajectories (30-Day Cone)</span>
+                    </span>
+                    <div className="flex items-center space-x-3 text-[10px] text-slate-400">
+                      <span className="flex items-center space-x-1">
+                        <span className="w-2.5 h-0.5 bg-emerald-400 inline-block"></span>
+                        <span>Target: ₹{auditResult.target}</span>
+                      </span>
+                      <span className="flex items-center space-x-1">
+                        <span className="w-2.5 h-0.5 bg-rose-400 inline-block"></span>
+                        <span>StopLoss: ₹{auditResult.stoploss}</span>
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-44 w-full pt-1">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={auditResult.quant_math.monte_carlo.path_sample_cone[0].map((_, stepIdx) => {
+                          const point = { step: `D${stepIdx}` };
+                          auditResult.quant_math.monte_carlo.path_sample_cone.forEach((p, idx) => {
+                            point[`path_${idx}`] = p[stepIdx];
+                          });
+                          return point;
+                        })}
+                      >
+                        <XAxis dataKey="step" stroke="#484f58" tick={{ fontSize: 9 }} />
+                        <YAxis domain={['auto', 'auto']} stroke="#484f58" tick={{ fontSize: 9 }} />
+                        <Tooltip contentStyle={{ backgroundColor: '#161b22', borderColor: '#30363d', fontSize: '10px' }} />
+                        <ReferenceLine y={auditResult.target} stroke="#10b981" strokeDasharray="3 3" label={{ value: 'Target', fill: '#10b981', fontSize: 10 }} />
+                        <ReferenceLine y={auditResult.stoploss} stroke="#f43f5e" strokeDasharray="3 3" label={{ value: 'StopLoss', fill: '#f43f5e', fontSize: 10 }} />
+                        {auditResult.quant_math.monte_carlo.path_sample_cone.map((_, idx) => (
+                          <Area
+                            key={idx}
+                            type="monotone"
+                            dataKey={`path_${idx}`}
+                            stroke={idx % 2 === 0 ? '#38bdf8' : '#818cf8'}
+                            fill="transparent"
+                            strokeWidth={1}
+                            dot={false}
+                          />
+                        ))}
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
 
               {/* Council Deliberation Trace Log */}
               <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3 space-y-2">
