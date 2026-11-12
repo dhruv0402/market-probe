@@ -10,6 +10,11 @@ services:
     envVars:
       - key: PORT
         value: 8080
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: marketprobe-redis
+          property: connectionString
       - key: MARKETPROBE_SECRET_KEY
         generateValue: true
       - key: MARKETPROBE_DB_PATH
@@ -18,3 +23,10 @@ services:
         value: /app/data/xgb_model.pkl
       - key: CORS_ORIGINS
         value: "*"
+
+  - type: redis
+    name: marketprobe-redis
+    plan: free
+    region: singapore
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
