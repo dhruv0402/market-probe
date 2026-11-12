@@ -2813,8 +2813,18 @@ function How({ startTour }) {
 
 /* ----------------------------------- APP ---------------------------------- */
 export default function MarketProbeApp() {
-  const [user, setUser] = useState(() => { try { return JSON.parse(localStorage.getItem('mp_user')); } catch { return null; } });
-  const [tab, setTab] = useState('FEED');
+  const [user, setUser] = useState(() => { 
+    try { 
+      const u = JSON.parse(localStorage.getItem('mp_user'));
+      if (u) return u;
+    } catch { }
+    // Default directly to authorized Institutional Trader so the app opens immediately
+    const defaultUser = { id: 'usr_demo', email: 'demo@marketprobe.in', name: 'Institutional Quant', role: 'pro_trader', tier: 'enterprise' };
+    localStorage.setItem('mp_user', JSON.stringify(defaultUser));
+    localStorage.setItem('mp_token', 'demo_jwt_token');
+    return defaultUser;
+  });
+  const [tab, setTab] = useState('TERMINAL'); // Open directly on the Multi-Agent Council Terminal
   const [tour, setTour] = useState(false);
   const [welcome, setWelcome] = useState(false);
   const [feed, setFeed] = useState(null);
