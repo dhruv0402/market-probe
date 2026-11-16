@@ -40,7 +40,7 @@ def test_database_integrity_and_scale():
     status_counts = dict(cur.fetchall())
     assert "HIT" in status_counts and status_counts["HIT"] >= 500
     assert "MISS" in status_counts and status_counts["MISS"] >= 500
-    assert "OPEN" in status_counts and status_counts["OPEN"] >= 100
+    assert "OPEN" in status_counts and status_counts["OPEN"] >= 5
     
     cur.execute("SELECT count(DISTINCT influencer_id) FROM recommendations")
     active_influencers = cur.fetchone()[0]

@@ -57,10 +57,16 @@ def run_backtest_engine():
             continue
             
         df = price_cache[ticker]
-        
-        entry_p = float(entry) if entry and entry > 1.0 else float(df['Open'].iloc[0])
-        target_p = float(target) if target and target > 1.0 and target != entry_p else (entry_p * 1.08 if action == 'BUY' else entry_p * 0.92)
-        stoploss_p = float(stoploss) if stoploss and stoploss > 1.0 and stoploss != entry_p else (entry_p * 0.95 if action == 'BUY' else entry_p * 1.05)
+        market_open = float(df['Open'].iloc[0])
+
+        entry_p = float(entry) if entry and entry > 1.0 else market_open
+        if market_open > 0 and abs(entry_p - market_open) / market_open > 0.50:
+            entry_p = market_open
+            target_p = entry_p * 1.08 if action == 'BUY' else entry_p * 0.92
+            stoploss_p = entry_p * 0.95 if action == 'BUY' else entry_p * 1.05
+        else:
+            target_p = float(target) if target and target > 1.0 and target != entry_p else (entry_p * 1.08 if action == 'BUY' else entry_p * 0.92)
+            stoploss_p = float(stoploss) if stoploss and stoploss > 1.0 and stoploss != entry_p else (entry_p * 0.95 if action == 'BUY' else entry_p * 1.05)
         
         status = 'OPEN'
         peak_return = 0.0
@@ -137,7 +143,9 @@ def run_backtest_engine():
                     break
                     
         rr_ratio = round(abs(target_p - entry_p) / max(1e-4, abs(entry_p - stoploss_p)), 2)
-        
+        peak_return = min(145.0, max(0.0, peak_return))
+        max_drawdown = max(-55.0, min(0.0, max_drawdown))
+
         cur.execute('''
             UPDATE recommendations
             SET entry_price = ?, target_price = ?, stoploss_price = ?,

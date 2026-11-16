@@ -56,17 +56,45 @@ def compute_empirical_bayes_shrinkage(hits: int, total: int) -> float:
     return round(float(shrunk_rate * 100.0), 1)
 
 
+def compute_brier_calibration_score(outcomes_with_conf: list) -> float:
+    """
+    Computes Brier Score BS = mean((c_t - o_t)^2) over resolved (HIT/MISS) recommendations.
+    Lower Brier score indicates sharper forecasting calibration; 0.250 is random coin-flip baseline.
+    """
+    if not outcomes_with_conf:
+        return 0.250
+
+    sq_errors = []
+    for status, conf in outcomes_with_conf:
+        if status not in ("HIT", "MISS"):
+            continue
+        outcome = 1.0 if status == "HIT" else 0.0
+        if conf is None:
+            prob = 0.65
+        else:
+            val = float(conf)
+            prob = val / 100.0 if val > 1.0 else val
+            prob = max(0.0, min(1.0, prob))
+        sq_errors.append((prob - outcome) ** 2)
+
+    if not sq_errors:
+        return 0.250
+    return round(float(np.mean(sq_errors)), 3)
+
+
 def evaluate_forensic_agent(
     creator_name: Optional[str] = None,
     ticker: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Audits the creator track record from SQLite and computes Bayesian bounds.
+    Audits the creator track record from SQLite, computes Empirical Bayes bounds,
+    Brier calibration score, and emits a Bayesian drift prior adjustment for Agent Quant.
     """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     creator_stats = None
+    matched_inf_id = None
     if creator_name and creator_name.strip():
         search_term = f"%{creator_name.strip()}%"
         cursor.execute("""
@@ -82,6 +110,7 @@ def evaluate_forensic_agent(
         """, (search_term, search_term))
         row = cursor.fetchone()
         if row and row[3] > 0:
+            matched_inf_id = row[0]
             creator_stats = {
                 "influencer_id": row[0],
                 "name": row[1] or row[2],
@@ -91,17 +120,34 @@ def evaluate_forensic_agent(
             }
 
     # If no specific creator found or provided, lookup ticker-specific track record across all creators
+    ticker_pattern = f"%{ticker.upper().replace('.NS', '').replace('.BO', '')}%" if ticker else "%"
     cursor.execute("""
         SELECT COUNT(id) as total_calls,
                SUM(CASE WHEN outcome_status = 'HIT' THEN 1 ELSE 0 END) as hits,
                SUM(CASE WHEN outcome_status = 'MISS' THEN 1 ELSE 0 END) as misses
         FROM recommendations
         WHERE ticker LIKE ?;
-    """, (f"%{ticker.upper().replace('.NS', '')}%",) if ticker else ("%",))
+    """, (ticker_pattern,))
     t_row = cursor.fetchone()
     ticker_calls = t_row[0] if t_row else 0
     ticker_hits = t_row[1] if (t_row and t_row[1]) else 0
-    ticker_misses = t_row[2] if (t_row and t_row[2]) else 0
+
+    # Fetch resolved calls for Brier Score calibration
+    if matched_inf_id is not None:
+        cursor.execute("""
+            SELECT outcome_status, confidence_score
+            FROM recommendations
+            WHERE influencer_id = ? AND outcome_status IN ('HIT', 'MISS')
+            LIMIT 250;
+        """, (matched_inf_id,))
+    else:
+        cursor.execute("""
+            SELECT outcome_status, confidence_score
+            FROM recommendations
+            WHERE ticker LIKE ? AND outcome_status IN ('HIT', 'MISS')
+            LIMIT 250;
+        """, (ticker_pattern,))
+    brier_rows = cursor.fetchall()
 
     conn.close()
 
@@ -118,20 +164,50 @@ def evaluate_forensic_agent(
     raw_rate = round((hits / total * 100.0), 1) if total > 0 else 50.0
     bayes_rate = compute_empirical_bayes_shrinkage(hits, total)
     wilson_ci = compute_wilson_score_interval(hits, total)
+    brier_score = compute_brier_calibration_score(brier_rows)
+
+    # Bayesian Drift Prior Adjustment in [-0.08, +0.08]
+    raw_drift_adj = (bayes_rate - 48.5) / 100.0
+    bayes_drift_adjustment = round(max(-0.08, min(0.08, raw_drift_adj)), 4)
+
+    needs_haircut = bayes_rate < 48.0 or total < 15
+    peer_challenge_for_quant = {
+        "requires_drift_haircut": needs_haircut,
+        "bayes_drift_adjustment": bayes_drift_adjustment,
+        "brier_score": brier_score,
+        "uncertainty_multiplier": 1.15 if total < 15 else 1.0,
+        "challenge_summary": (
+            f"Apply conservative Bayesian drift adjustment ({bayes_drift_adjustment:+.4f}) "
+            f"due to {'low sample size' if total < 15 else 'sub-prior accuracy'} "
+            f"({bayes_rate}% Bayes rate, Brier {brier_score})."
+            if needs_haircut
+            else f"Empirical creator track record verified ({bayes_rate}% Bayes rate, Brier {brier_score}); "
+                 f"apply posterior drift adjustment ({bayes_drift_adjustment:+.4f})."
+        ),
+    }
 
     # Conviction & Vote Gating
     if bayes_rate >= 55.0 and wilson_ci["lower"] >= 45.0:
         vote = "CREDIBLE"
         conviction = min(92, int(bayes_rate + 15))
-        verdict = f"{source_label} has strong empirical pedigree ({bayes_rate}% Bayes win-rate across {total} audited calls)."
+        verdict = (
+            f"{source_label} has strong empirical pedigree ({bayes_rate}% Bayes win-rate, "
+            f"Brier {brier_score} across {total} audited calls)."
+        )
     elif bayes_rate >= 45.0:
         vote = "AVERAGE"
         conviction = 50
-        verdict = f"{source_label} displays coin-flip accuracy ({bayes_rate}% Bayes rate, CI [{wilson_ci['lower']}% - {wilson_ci['upper']}%])."
+        verdict = (
+            f"{source_label} displays coin-flip accuracy ({bayes_rate}% Bayes rate, "
+            f"CI [{wilson_ci['lower']}% - {wilson_ci['upper']}%], Brier {brier_score})."
+        )
     else:
         vote = "UNRELIABLE_FLAG"
         conviction = max(15, int(bayes_rate * 0.7))
-        verdict = f"Sub-market empirical hit rate ({bayes_rate}% Bayes win-rate across {total} calls). Historical edge is negative."
+        verdict = (
+            f"Sub-market empirical hit rate ({bayes_rate}% Bayes win-rate across {total} calls, "
+            f"Brier {brier_score}). Historical edge is negative."
+        )
 
     return {
         "agent": "Forensic Track-Record Agent",
@@ -143,5 +219,8 @@ def evaluate_forensic_agent(
         "raw_hit_rate": raw_rate,
         "bayes_shrinkage_rate": bayes_rate,
         "wilson_95_ci": wilson_ci,
-        "source_audited": source_label
+        "brier_score": brier_score,
+        "bayes_drift_adjustment": bayes_drift_adjustment,
+        "peer_challenge_for_quant": peer_challenge_for_quant,
+        "source_audited": source_label,
     }

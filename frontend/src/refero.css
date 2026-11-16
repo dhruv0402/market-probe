@@ -25,9 +25,7 @@ body {
   background-color: var(--canvas);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
 

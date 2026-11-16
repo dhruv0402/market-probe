@@ -2000,16 +2000,17 @@ class MultiAgentAuditRequest(BaseModel):
     creator_name: str = ""
     user_id: str = "demo-trader"
     horizon_days: int = 30
+    user_directive: str = ""
 
 @app.post("/api/multiagent/audit")
 async def handle_multiagent_audit(req: MultiAgentAuditRequest):
     """
-    Executes Council of 5 Specialized Agents:
-    - Quant Math: 1,000-Path Monte Carlo GBM & Expected Value
-    - Forensic Auditor: Empirical Bayes & Wilson 95% Confidence Intervals
-    - Risk & Customer Memory: CVaR (95%) & Persistent Profile Constraints
-    - SEBI Compliance: Circuit Filters & Pump Guards
-    - CIO Consensus: Bayesian deliberative synthesis
+    Executes 3-Round Communicating Council of 5 Specialized Agents:
+    1. Perception & RAG Intelligence: FAISS 544-vector RAG, SEBI RA & Herd Consensus
+    2. Forensic Empirical Bayes: Wilson 95% CI, Brier Calibration & Prior Haircut
+    3. Stochastic Quant Math: 1,000-Path Merton Jump-Diffusion & Counterfactual Search
+    4. Risk, Tax & Memory: CVaR (95%), Sec 111A/112A Tax & Half-Kelly Sizing
+    5. CIO Meta-Governor: 3-Round Equilibrium Synthesis & Counterfactual Decree
     """
     from src.quant.multiagent.cio_orchestrator import run_cio_council_deliberation
     return run_cio_council_deliberation(
@@ -2020,7 +2021,8 @@ async def handle_multiagent_audit(req: MultiAgentAuditRequest):
         stoploss_price=req.stoploss_price,
         creator_name=req.creator_name,
         user_id=req.user_id,
-        horizon_days=req.horizon_days
+        horizon_days=req.horizon_days,
+        user_directive=req.user_directive
     )
 
 @app.post("/api/audit/drop")
@@ -2110,11 +2112,15 @@ async def handle_drag_and_drop_audit(
 
 @app.on_event("startup")
 async def start_background_workers():
-    """Starts background ingestion loop and verifies Redis connection."""
+    """Starts background ingestion loop, warms FAISS vector index, and verifies Redis connection."""
     import asyncio
+    import threading
     from src.quant.background_scheduler import run_continuous_ingestion_loop
+    from src.quant.rag_service import _initialize_index
+
+    threading.Thread(target=_initialize_index, daemon=True).start()
     asyncio.create_task(run_continuous_ingestion_loop(interval_seconds=3600))
-    print("🚀 Background Multi-Agent Ingestion Scheduler initialized.")
+    print("🚀 Background Multi-Agent Ingestion Scheduler & FAISS Index Warmup initialized.")
 
 # -------------------------------------------------------------------------
 # Static Frontend Serving for Single-Container Docker / Cloud Deployment

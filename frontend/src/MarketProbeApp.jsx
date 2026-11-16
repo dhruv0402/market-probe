@@ -3021,7 +3021,10 @@ export default function MarketProbeApp() {
         </button>
       </header>
 
-      <main className="mp-main">
+      <main
+        className="mp-main"
+        style={tab === 'TERMINAL' ? { maxWidth: '100%', padding: 0, margin: 0 } : undefined}
+      >
         {tab === 'FEED' && <Feed data={feed} loading={!feed && !feedErr} error={feedErr} />}
         {tab === 'TERMINAL' && <AIHedgeFundTerminal />}
         {tab === 'WATCHLIST' && <WatchlistComponent />}
