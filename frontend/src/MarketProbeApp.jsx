@@ -37,21 +37,26 @@ async function api(path, opts = {}) {
 const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 }));
 const inr = (n) => (n == null ? '—' : '₹' + fmt(n));
 
-const TABS = [
-  { id: 'FEED', label: 'Feed', icon: Rss },
-  { id: 'TERMINAL', label: 'AI Quant Desk (Terminal)', icon: Activity },
-  { id: 'FINBOT', label: 'FinBot Knowledge Hub', icon: Sparkles },
-  { id: 'WATCHLIST', label: 'My Watchlist', icon: Bookmark },
-  { id: 'STOCKS', label: 'Stocks & Sectors', icon: Layers },
-  { id: 'ALERTS', label: 'Alpha Alerts', icon: Bell },
-  { id: 'RANKINGS', label: 'Rankings', icon: Trophy },
+const PRIMARY_TABS = [
+  { id: 'TERMINAL', label: '5-Agent Council', icon: Activity },
+  { id: 'FEED', label: 'Verified Feed', icon: Rss },
+  { id: 'RANKINGS', label: 'Creator Rankings', icon: Trophy },
   { id: 'SIMULATOR', label: 'P&L Simulator', icon: Calculator },
+  { id: 'FINBOT', label: 'FinBot AI Hub', icon: Sparkles },
+  { id: 'DATASET', label: 'Dataset & Rigor', icon: Database },
+];
+
+const MORE_TABS = [
+  { id: 'STOCKS', label: 'Stocks & Sectors', icon: Layers },
+  { id: 'WATCHLIST', label: 'My Watchlist', icon: Bookmark },
+  { id: 'ALERTS', label: 'Alpha Alerts', icon: Bell },
+  { id: 'CHECKER', label: 'Fact-Check NLP', icon: CheckCircle2 },
   { id: 'EVAL', label: 'AI Evaluation', icon: ShieldCheck },
-  { id: 'CHECKER', label: 'Fact-Check', icon: CheckCircle2 },
-  { id: 'DATASET', label: 'Dataset', icon: Database },
   { id: 'BILLING', label: 'Plans & Billing', icon: CreditCard },
   { id: 'HOW', label: 'How it works', icon: BookOpen },
 ];
+
+const TABS = [...PRIMARY_TABS, ...MORE_TABS];
 
 const TOUR_STEPS = [
   { target: 'nav', title: 'Your navigation', body: 'Seamlessly switch across live feed, stock-level analytics, verified influencer rankings, backtesting simulator, and instant AI fact-checker.' },
@@ -85,7 +90,7 @@ function LiveTape() {
         .catch(() => {});
     };
     fetchQuotes();
-    const iv = setInterval(fetchQuotes, 1500);
+    const iv = setInterval(fetchQuotes, 10000);
     return () => { active = false; clearInterval(iv); };
   }, []);
 
@@ -699,10 +704,10 @@ function LandingPage({ onOpenAuth, onLaunchDemo, theme, setTheme, glow, setGlow 
 }
 
 /* ---------------------------------- FEED ---------------------------------- */
-function TipCard({ t, first }) {
+function TipCard({ t, first, onAuditInCouncil }) {
   const [playing, setPlaying] = useState(false);
   const [showTheater, setShowTheater] = useState(false);
-  const [showChart, setShowChart] = useState(true);
+  const [showChart, setShowChart] = useState(false);
   const [showCalc, setShowCalc] = useState(false);
   const [candles, setCandles] = useState([]);
   const [loadingCandles, setLoadingCandles] = useState(false);
@@ -725,23 +730,6 @@ function TipCard({ t, first }) {
   const totalCost = suggestedQty * entry;
   const expectedProfit = suggestedQty * perShareReward;
   const maxLoss = suggestedQty * perShareRisk;
-
-  // Load candles on component mount so chart renders directly by default
-  useEffect(() => {
-    let mounted = true;
-    setLoadingCandles(true);
-    api(`/stock-candles?symbol=${t.ticker}&period=1mo&interval=1d`)
-      .then((d) => {
-        if (mounted) setCandles(d.candles || []);
-      })
-      .catch(() => {
-        if (mounted) setCandles([]);
-      })
-      .finally(() => {
-        if (mounted) setLoadingCandles(false);
-      });
-    return () => { mounted = false; };
-  }, [t.ticker]);
 
   const toggleChart = () => {
     if (!showChart && candles.length === 0) {
@@ -1089,6 +1077,33 @@ function TipCard({ t, first }) {
           </div>
 
           <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            {onAuditInCouncil && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() =>
+                  onAuditInCouncil({
+                    ticker: t.ticker,
+                    action: t.action,
+                    entry_price: t.entry_price,
+                    target_price: t.target_price,
+                    stoploss_price: t.stoploss_price,
+                    creator_name: t.influencer_name,
+                  })
+                }
+                style={{
+                  padding: '6px 10px',
+                  fontSize: 11.5,
+                  gap: 4,
+                  color: '#38bdf8',
+                  borderColor: 'rgba(56, 189, 248, 0.35)',
+                }}
+                title="Audit this trade setup via 5-Agent Council"
+              >
+                <Zap size={12} />
+                <span>Audit in Council</span>
+              </button>
+            )}
             <button
               type="button"
               className="btn btn-ghost"
@@ -1385,7 +1400,7 @@ function TipCard({ t, first }) {
   );
 }
 
-function Feed({ data, loading, error, onSelectStock }) {
+function Feed({ data, loading, error, onSelectStock, onAuditInCouncil }) {
   const [q, setQ] = useState('');
   const [plat, setPlat] = useState('ALL');
   const [hiConv, setHiConv] = useState(false);
@@ -1450,6 +1465,25 @@ function Feed({ data, loading, error, onSelectStock }) {
                       <span style={{ color: a.distance_from_entry_pct >= 0 ? 'var(--green2)' : 'var(--blue)', fontWeight: 700 }}>
                         {a.distance_from_entry_pct >= 0 ? `+${a.distance_from_entry_pct}%` : `${a.distance_from_entry_pct}%`} vs Entry
                       </span>
+                      {onAuditInCouncil && (
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          style={{ padding: '3px 8px', fontSize: 10.5, color: '#38bdf8', borderColor: 'rgba(56,189,248,0.35)' }}
+                          onClick={() =>
+                            onAuditInCouncil({
+                              ticker: a.ticker,
+                              action: a.action,
+                              entry_price: a.entry_price,
+                              target_price: a.target_price,
+                              stoploss_price: a.stoploss_price,
+                              creator_name: a.creator_name,
+                            })
+                          }
+                        >
+                          ⚡ Audit
+                        </button>
+                      )}
                       <a 
                         href={`https://kite.zerodha.com/chart/ext/ciq/NSE/${a.ticker}`}
                         target="_blank"
@@ -1582,7 +1616,7 @@ function Feed({ data, loading, error, onSelectStock }) {
       )}
       <div className="grid-feed">
         {shown.map((t, i) => (
-          <TipCard key={t.id} t={t} first={i === 0} />
+          <TipCard key={t.id} t={t} first={i === 0} onAuditInCouncil={onAuditInCouncil} />
         ))}
       </div>
     </>
@@ -2825,11 +2859,19 @@ export default function MarketProbeApp() {
     return defaultUser;
   });
   const [tab, setTab] = useState('TERMINAL'); // Open directly on the Multi-Agent Council Terminal
+  const [selectedAuditSetup, setSelectedAuditSetup] = useState(null);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [tour, setTour] = useState(false);
   const [welcome, setWelcome] = useState(false);
   const [feed, setFeed] = useState(null);
   const [feedErr, setFeedErr] = useState('');
   const [copilotOpen, setCopilotOpen] = useState(false);
+
+  const openInQuantCouncil = (setup) => {
+    setSelectedAuditSetup({ ...setup, _ts: Date.now() });
+    setMoreMenuOpen(false);
+    setTab('TERMINAL');
+  };
 
   // Global Cmd+K / Ctrl+K / Ctrl+J hotkey listener to toggle FinBot Copilot
   useEffect(() => {
@@ -2960,21 +3002,76 @@ export default function MarketProbeApp() {
       <LiveTape />
       
       <header className="mp-header">
-        <div className="mp-logo" onClick={() => setTab('FEED')}>
+        <div className="mp-logo" onClick={() => setTab('TERMINAL')}>
           <div className="mp-logo-badge"><Activity size={20} /></div>
           <div>
             MarketProbe<span style={{ color: 'var(--green2)' }}>.</span>
-            <small>ALPHA ENGINE</small>
+            <small>QUANT COUNCIL</small>
           </div>
         </div>
 
-        <nav className="mp-nav" data-tour="nav">
-          {TABS.map(({ id, label, icon: I }) => (
-            <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>
+        <nav className="mp-nav" data-tour="nav" style={{ position: 'relative' }}>
+          {PRIMARY_TABS.map(({ id, label, icon: I }) => (
+            <button
+              key={id}
+              className={tab === id ? 'active' : ''}
+              onClick={() => {
+                setTab(id);
+                setMoreMenuOpen(false);
+              }}
+            >
               <I size={15} />
               <span>{label}</span>
             </button>
           ))}
+
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              className={MORE_TABS.some((m) => m.id === tab) ? 'active' : ''}
+              onClick={() => setMoreMenuOpen((prev) => !prev)}
+            >
+              <Layers size={15} />
+              <span>More Tools</span>
+              <ChevronDown size={13} />
+            </button>
+
+            {moreMenuOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  right: 0,
+                  minWidth: 210,
+                  background: '#0d131f',
+                  border: '1px solid var(--line2)',
+                  borderRadius: 10,
+                  padding: 6,
+                  zIndex: 120,
+                  boxShadow: '0 14px 32px rgba(0,0,0,0.65)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 2,
+                }}
+              >
+                {MORE_TABS.map(({ id, label, icon: I }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={tab === id ? 'active' : ''}
+                    onClick={() => {
+                      setTab(id);
+                      setMoreMenuOpen(false);
+                    }}
+                    style={{ justifyContent: 'flex-start', width: '100%', padding: '8px 12px', fontSize: 13.5 }}
+                  >
+                    <I size={14} />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </nav>
 
         <div className="mp-spacer" />
@@ -3004,10 +3101,6 @@ export default function MarketProbeApp() {
           <kbd style={{ fontSize: '10px', background: 'rgba(0, 0, 0, 0.3)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '3px', padding: '1px 5px', color: '#94a3b8' }}>⌘K</kbd>
         </button>
 
-        <button className="btn btn-blue" data-tour="tour-btn" onClick={startTour}>
-          <PlayCircle size={15} /> Product Tour
-        </button>
-
         <div className="user-chip">
           <div className="avatar">{user.name ? user.name[0].toUpperCase() : 'U'}</div>
           <div className="meta">
@@ -3025,8 +3118,20 @@ export default function MarketProbeApp() {
         className="mp-main"
         style={tab === 'TERMINAL' ? { maxWidth: '100%', padding: 0, margin: 0 } : undefined}
       >
-        {tab === 'FEED' && <Feed data={feed} loading={!feed && !feedErr} error={feedErr} />}
-        {tab === 'TERMINAL' && <AIHedgeFundTerminal />}
+        {tab === 'FEED' && (
+          <Feed
+            data={feed}
+            loading={!feed && !feedErr}
+            error={feedErr}
+            onAuditInCouncil={openInQuantCouncil}
+          />
+        )}
+        {tab === 'TERMINAL' && (
+          <AIHedgeFundTerminal
+            selectedSetup={selectedAuditSetup}
+            onNavigateTab={setTab}
+          />
+        )}
         {tab === 'WATCHLIST' && <WatchlistComponent />}
         {tab === 'ALERTS' && <AlphaAlerts />}
         {tab === 'STOCKS' && <StocksRadar />}
