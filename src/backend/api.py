@@ -2109,7 +2109,7 @@ async def get_finbot_status():
             "status": "healthy",
             "service": "Native FinBot AI Quantitative Core with Persistent Customer Memory",
             "knowledge_vectors": 544,
-            "models": ["gemini-2.5-flash", "gemini-2.5-flash-lite", "faiss-vector-rag"]
+            "models": ["gemini-3.8-flash", "gemini-flash-lite-latest", "faiss-vector-rag"]
         }
     }
 

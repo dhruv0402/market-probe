@@ -46,7 +46,7 @@ class LLMWorkerNode:
 class LLMLoadBalancerRouter:
     """
     Production-Grade LLM Orchestration & Failover Load Balancer:
-    - Node Pool: Gemini 3.5 Flash (Primary) -> Gemini 3.5 Flash Lite (Secondary) -> Local Ollama Llama 3.1 (Tertiary)
+    - Node Pool: Gemini 3.8 Flash (Primary) -> Gemini Flash-Lite Latest (Secondary) -> Local Ollama Llama 3.1 (Tertiary)
     - Circuit Breaking with automated recovery cooldowns.
     - Token Bucket Rate Limiting per worker node.
     - Zero-downtime deterministic RAG fallback if all cloud nodes are exhausted.
@@ -56,17 +56,17 @@ class LLMLoadBalancerRouter:
         self.gemini_key = os.getenv("GEMINI_API_KEY", "")
         self.nodes = [
             LLMWorkerNode(
-                name="gemini-2.5-flash-primary",
+                name="gemini-3.8-flash-primary",
                 provider="gemini",
-                model_name="gemini-2.5-flash",
-                endpoint="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+                model_name="gemini-3.8-flash",
+                endpoint="https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
                 rpm_limit=60
             ),
             LLMWorkerNode(
-                name="gemini-2.5-flash-lite-secondary",
+                name="gemini-flash-lite-secondary",
                 provider="gemini",
-                model_name="gemini-2.5-flash-lite",
-                endpoint="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
+                model_name="gemini-flash-lite-latest",
+                endpoint="https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent",
                 rpm_limit=100
             ),
             LLMWorkerNode(
@@ -113,7 +113,7 @@ class LLMLoadBalancerRouter:
                         "maxOutputTokens": 2048
                     }
                 }
-                async with httpx.AsyncClient(timeout=8.0) as client:
+                async with httpx.AsyncClient(timeout=15.0) as client:
                     resp = await client.post(url, json=payload)
                     if resp.status_code == 200:
                         data = resp.json()
@@ -121,8 +121,11 @@ class LLMLoadBalancerRouter:
                         if candidates:
                             parts = candidates[0].get("content", {}).get("parts", [])
                             if parts:
-                                node.record_success()
-                                return parts[0].get("text", "").strip(), node.name
+                                text_parts = [p.get("text", "") for p in parts if not p.get("thought") and p.get("text")]
+                                final_text = "".join(text_parts).strip() or parts[0].get("text", "").strip()
+                                if final_text:
+                                    node.record_success()
+                                    return final_text, node.name
                     node.record_failure()
             except Exception:
                 node.record_failure()

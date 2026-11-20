@@ -52,13 +52,13 @@ export default function FinBotDesk({ onNavigateTab }) {
     {
       role: 'assistant',
       text:
-        '### MarketProbe FinBot Quant Advisor Online\n' +
+        '### MarketProbe FinBot Quant Analyst Online\n' +
         'Grounded across the full verified institutional knowledge graph:\n' +
         '- **YouTube Financial Transcripts**: 74 indexed creator videos & swing-trading transcripts\n' +
         '- **Audited NSE Call Ledger**: Verified entry, target, stop-loss, and tick-replayed outcomes\n' +
         '- **51 Creator & Desk Track Records**: Empirical Bayes win rates & SEBI RA verification\n' +
         '- **Quant & Indian Tax Law**: Markowitz MPT optimization and Section 111A / 112A / 80C rules',
-      node: 'gemini-2.5-flash-router',
+      node: 'gemini-3.8-flash-router',
     },
   ]);
   const [input, setInput] = useState('');
