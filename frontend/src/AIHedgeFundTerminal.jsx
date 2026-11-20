@@ -24,7 +24,12 @@ import {
   Radio,
   Layers,
   RotateCcw,
+  Gavel,
+  Mic,
+  Users,
 } from 'lucide-react';
+import FilingsDebatePanel from './FilingsDebatePanel.jsx';
+import VocalStressPanel from './VocalStressPanel.jsx';
 import {
   AreaChart,
   Area,
@@ -155,7 +160,8 @@ const ASSET_DISPLAY_LABELS = {
 };
 
 export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
-  const [activeNav, setActiveNav] = useState('council'); // 'council' | 'dropzone' | 'quantlab'
+  const [activeNav, setActiveNav] = useState('council'); // 'council' | 'debate' | 'dropzone' | 'quantlab'
+  const [dropzoneSubTab, setDropzoneSubTab] = useState('tip'); // 'tip' | 'stress'
   const [ticker, setTicker] = useState('RELIANCE');
   const [action, setAction] = useState('BUY');
   const [entryPrice, setEntryPrice] = useState(1378);
@@ -521,7 +527,18 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
               }`}
             >
               <Scale className="w-3.5 h-3.5" />
-              <span>Deliberation Council</span>
+              <span>Council</span>
+            </button>
+            <button
+              onClick={() => setActiveNav('debate')}
+              className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                activeNav === 'debate'
+                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/35'
+                  : 'text-slate-400 hover:text-white border border-transparent'
+              }`}
+            >
+              <Gavel className="w-3.5 h-3.5" />
+              <span>Bull vs Bear</span>
             </button>
             <button
               onClick={() => setActiveNav('dropzone')}
@@ -531,8 +548,8 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
                   : 'text-slate-400 hover:text-white border border-transparent'
               }`}
             >
-              <UploadCloud className="w-3.5 h-3.5" />
-              <span>Multimodal Dropzone</span>
+              <Mic className="w-3.5 h-3.5" />
+              <span>Dropzone &amp; Stress</span>
             </button>
             <button
               onClick={() => {
@@ -546,8 +563,18 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
               }`}
             >
               <BarChart2 className="w-3.5 h-3.5" />
-              <span>MPT &amp; Tax Lab</span>
+              <span>MPT &amp; Tax</span>
             </button>
+            {onNavigateTab && (
+              <button
+                onClick={() => onNavigateTab('INSIDERS')}
+                className="px-2.5 py-1 rounded text-xs font-semibold text-slate-400 hover:text-emerald-300 border border-transparent hover:border-emerald-500/30 transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+                title="Open Insider Cluster Buy Radar & Smart-Money Divergence"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Insider Radar</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -750,10 +777,67 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
           </div>
         </aside>
 
-        {/* CENTER PANEL: Dynamic Council / Dropzone / Quant Lab Stage */}
+        {/* CENTER PANEL: Dynamic Council / Filings Debate / Dropzone & Stress / Quant Lab Stage */}
         <main className="flex-1 bg-[#06090e] overflow-y-auto p-5 space-y-5">
-          {activeNav === 'dropzone' ? (
-            /* MODE 2: MULTIMODAL DRAG-AND-DROP INGESTION */
+          {activeNav === 'debate' ? (
+            <FilingsDebatePanel
+              initialTicker={ticker}
+              onPushToCouncil={({ ticker: tSym, directive }) => {
+                const clean = (tSym || ticker).toUpperCase();
+                setTicker(clean);
+                setUserDirective(directive || '');
+                setActiveNav('council');
+                runMultiAgentAudit({ ticker: clean, user_directive: directive || '' });
+              }}
+            />
+          ) : activeNav === 'dropzone' ? (
+            /* MODE 2: MULTIMODAL TRADE DROPZONE + EARNINGS CALL VOCAL STRESS LAB */
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-[#0b0f17] border border-[#1b2434] rounded-lg px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDropzoneSubTab('tip')}
+                    className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 cursor-pointer border ${
+                      dropzoneSubTab === 'tip'
+                        ? 'bg-sky-500/15 text-sky-300 border-sky-500/40'
+                        : 'bg-[#111722] text-slate-400 border-[#1b2434] hover:text-white'
+                    }`}
+                  >
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    <span>Trade Tip Dropzone</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDropzoneSubTab('stress')}
+                    className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 cursor-pointer border ${
+                      dropzoneSubTab === 'stress'
+                        ? 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+                        : 'bg-[#111722] text-slate-400 border-[#1b2434] hover:text-white'
+                    }`}
+                  >
+                    <Mic className="w-3.5 h-3.5" />
+                    <span>Earnings Vocal Stress Lab</span>
+                  </button>
+                </div>
+                <span className="text-[11px] font-mono text-slate-500">
+                  {dropzoneSubTab === 'stress'
+                    ? 'Acoustic Biomarkers (librosa) + Gemini Transcribe + Hedging Forensics'
+                    : 'PDF / YouTube / Text Call Ingestion → Live SQLite + 5-Agent Council'}
+                </span>
+              </div>
+
+              {dropzoneSubTab === 'stress' ? (
+                <VocalStressPanel
+                  onSendSignalToCouncil={({ ticker: tSym, directive }) => {
+                    const clean = (tSym || ticker).toUpperCase();
+                    setTicker(clean);
+                    setUserDirective(directive || '');
+                    setActiveNav('council');
+                    runMultiAgentAudit({ ticker: clean, user_directive: directive || '' });
+                  }}
+                />
+              ) : (
             <div className="max-w-3xl mx-auto space-y-4">
               <div className="bg-[#0b0f17] border border-[#1b2434] rounded-lg p-5 space-y-2">
                 <div className="flex items-center justify-between">
@@ -868,6 +952,8 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
                     : 'Commit to Empirical DB & Run Council Audit'}
                 </span>
               </button>
+            </div>
+              )}
             </div>
           ) : activeNav === 'quantlab' ? (
             /* MODE 3: MPT PORTFOLIO OPTIMIZER & SECTION 112A TAX LAB */

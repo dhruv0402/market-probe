@@ -14,6 +14,7 @@ import FinBotDesk from './FinBotDesk.jsx';
 import FinBotDrawer from './FinBotDrawer.jsx';
 import AIHedgeFundTerminal from './AIHedgeFundTerminal.jsx';
 import AIEvalHarnessView from './AIEvalHarnessView.jsx';
+import InsiderClusterRadar from './InsiderClusterRadar.jsx';
 import './mp.css';
 
 const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || '8080';
@@ -47,6 +48,7 @@ const PRIMARY_TABS = [
 ];
 
 const MORE_TABS = [
+  { id: 'INSIDERS', label: 'Insider Cluster Radar', icon: Users },
   { id: 'STOCKS', label: 'Stocks & Sectors', icon: Layers },
   { id: 'WATCHLIST', label: 'My Watchlist', icon: Bookmark },
   { id: 'ALERTS', label: 'Alpha Alerts', icon: Bell },
@@ -3378,6 +3380,7 @@ export default function MarketProbeApp() {
             onNavigateTab={setTab}
           />
         </div>
+        {tab === 'INSIDERS' && <InsiderClusterRadar onAuditInCouncil={openInQuantCouncil} />}
         {tab === 'WATCHLIST' && <WatchlistComponent />}
         {tab === 'ALERTS' && <AlphaAlerts onAuditInCouncil={openInQuantCouncil} />}
         {tab === 'STOCKS' && <StocksRadar />}

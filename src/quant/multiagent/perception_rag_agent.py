@@ -101,7 +101,23 @@ def evaluate_perception_rag_agent(
         and ((is_buy_action and herd_bullish_pct < 35.0) or (not is_buy_action and herd_bullish_pct > 75.0))
     )
 
-    # 3. Statutory SEBI circuit & liquidity defense
+    # 3. Insider Cluster Buy & Smart-Money Divergence Telemetry (Phase 2)
+    insider_summary: Dict[str, Any] = {}
+    try:
+        from src.quant.insider_cluster_service import get_ticker_insider_summary
+
+        insider_summary = get_ticker_insider_summary(clean_ticker, window_days=90)
+    except Exception:
+        insider_summary = {"has_activity": False, "divergence": {"code": "NO_RECENT_FILINGS", "label": "No Recent Filings"}}
+
+    insider_code = (insider_summary.get("divergence") or {}).get("code", "NO_RECENT_FILINGS")
+    insider_note = ""
+    if insider_summary.get("has_activity"):
+        b_cnt = insider_summary.get("distinct_buyers", 0)
+        s_cnt = insider_summary.get("distinct_sellers", 0)
+        insider_note = f" | Insider Flow: {insider_code.replace('_', ' ')} ({b_cnt} buyers / {s_cnt} sellers)"
+
+    # 4. Statutory SEBI circuit & liquidity defense
     sebi_pass = not any(w in clean_ticker for w in ["PENNY", "UNREG", "CIRCUIT"])
     circuit_band = "20% Dynamic NSE Band" if sebi_pass else "Restricted / GSM Surveillance Risk"
 
@@ -110,7 +126,15 @@ def evaluate_perception_rag_agent(
         conviction = 25
         verdict = (
             f"Illiquid/surveillance counter flagged for {clean_ticker}. "
-            f"Retrieved {len(rag_chunks)} FAISS context matches."
+            f"Retrieved {len(rag_chunks)} FAISS context matches.{insider_note}"
+        )
+    elif insider_code == "FINFLUENCER_TRAP" and is_buy_action:
+        vote = "DIVERGENT_SIGNAL"
+        conviction = max(38, (54 if sebi_registered else 42))
+        verdict = (
+            f"Smart-Money Divergence Alert: {matched_creator_name} proposes LONG on {clean_ticker}, "
+            f"but {insider_summary.get('distinct_sellers', 0)} insiders are net selling against "
+            f"{herd_bullish_pct}% bullish crowd ({total_herd} calls).{insider_note}"
         )
     elif contrarian_divergence_flag:
         vote = "DIVERGENT_SIGNAL"
@@ -118,15 +142,18 @@ def evaluate_perception_rag_agent(
         verdict = (
             f"Contrarian setup: {matched_creator_name} ({'SEBI Reg' if sebi_registered else 'Unregistered'}) "
             f"diverges from {herd_bullish_pct}% bullish peer consensus across {total_herd} tracked calls; "
-            f"{len(rag_chunks)} FAISS transcript hits grounded."
+            f"{len(rag_chunks)} FAISS transcript hits grounded.{insider_note}"
         )
     else:
         vote = "COMPLIANT" if sebi_registered or total_herd >= 5 else "UNVERIFIED_DESK"
-        conviction = 86 if sebi_registered else (72 if len(rag_chunks) > 0 else 64)
+        base_conv = 86 if sebi_registered else (72 if len(rag_chunks) > 0 else 64)
+        if insider_code in ("SMART_MONEY_CONFIRMED", "STEALTH_ACCUMULATION") and is_buy_action:
+            base_conv = min(94, base_conv + 6)
+        conviction = base_conv
         reg_label = f"SEBI Registered ({sebi_reg_no or 'Active'})" if sebi_registered else "Unregistered Creator"
         verdict = (
             f"{reg_label} | Herd consensus {herd_bullish_pct}% BUY ({total_herd} audited calls) | "
-            f"{len(rag_chunks)} FAISS RAG evidence chunks matched | Circuit: {circuit_band}."
+            f"{len(rag_chunks)} FAISS RAG evidence chunks matched | Circuit: {circuit_band}{insider_note}."
         )
 
     return {
@@ -140,6 +167,7 @@ def evaluate_perception_rag_agent(
         "herd_buy_calls": buy_count,
         "herd_sell_calls": sell_count,
         "contrarian_divergence_flag": contrarian_divergence_flag,
+        "insider_telemetry": insider_summary,
         "sebi_registered": sebi_registered,
         "sebi_reg_no": sebi_reg_no,
         "sebi_compliant": sebi_pass,
