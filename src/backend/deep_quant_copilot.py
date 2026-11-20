@@ -141,33 +141,28 @@ class DeepQuantCopilotEngine:
             shap_factors.append({"factor": "Circuit Filter Adherence", "impact": "+4.0%", "type": "positive", "detail": f"Target +{target_pct:.1f}% is within statutory NSE execution bands"})
 
         conviction = round(min(94.5, max(15.0, base_conviction)), 1)
-        grade = "A (High Alpha Conviction)" if conviction >= 70 else "B (Moderate Setup)" if conviction >= 50 else "C (High Risk / Reject)"
-        verdict = "APPROVE" if conviction >= 65 else "CAUTION" if conviction >= 50 else "REJECT"
+        grade = "Tier A (Strong Historical Alignment)" if conviction >= 70 else "Tier B (Moderate Risk/Reward Profile)" if conviction >= 50 else "Tier C (Elevated Stop-Out Risk)"
+        verdict = "FAVORABLE_PROFILE" if conviction >= 65 else "BALANCED_CAUTION" if conviction >= 50 else "HIGH_RISK_PROFILE"
 
-        # Build Institutional Chain-of-Thought Response
+        # Build Institutional Chain-of-Thought Response (strictly analytical, non-advisory)
         thought_trace = (
-            f"🧠 **FINBOT DEEP QUANT REASONING TRACE**\n"
-            f"1. **Entity Extraction**: Resolved symbol `{ticker}` ({action}) at ₹{entry:.2f} (Target: ₹{target:.2f}, Stop Loss: ₹{stoploss:.2f}).\n"
-            f"2. **Risk-Reward Geometry**: Calculated R:R = **{rr:.2f}:1** with risk distance ₹{abs(entry - stoploss):.2f} ({(abs(entry - stoploss)/entry*100):.2f}%).\n"
-            f"3. **Empirical Dataset Lookup**: {t_calls} historical calls audited on {ticker}; average peak return +{t_peak}%, average max drawdown {t_dd}%.\n"
-            f"4. **Bayesian Alpha Gating**: Evaluated 13 XGBoost features -> **{conviction}% Conviction** (Rating: **{grade}**)."
+            f"### FINBOT EMPIRICAL RISK AUDIT TRACE\n"
+            f"- **Entity Extraction**: Resolved `{ticker}` ({action}) at ₹{entry:.2f} (Target: ₹{target:.2f}, Stop Loss: ₹{stoploss:.2f}).\n"
+            f"- **Risk-Reward Geometry**: Computed R:R = **{rr:.2f}:1** with stop distance ₹{abs(entry - stoploss):.2f} ({(abs(entry - stoploss)/entry*100):.2f}%).\n"
+            f"- **Empirical Dataset Lookup**: {t_calls} historical logged calls on {ticker}; historical mean peak +{t_peak}%, mean max drawdown {t_dd}%.\n"
+            f"- **Bayesian Calibration Score**: **{conviction}%** (**{grade}**)."
         )
 
-        shap_table = "\n".join([f"• **{f['factor']}** ({f['impact']}): {f['detail']}" for f in shap_factors])
+        shap_table = "\n".join([f"- **{f['factor']}** ({f['impact']}): {f['detail']}" for f in shap_factors])
 
         reply = (
             f"{thought_trace}\n\n"
-            f"### 📊 Institutional Trade Verdict: **{verdict}** (Score: {conviction}%)\n"
-            f"| Metric | Level | Benchmark / Status |\n"
-            f"| :--- | :--- | :--- |\n"
-            f"| **Instrument** | `{ticker}` | NSE Equity Cash / Delivery |\n"
-            f"| **Action** | **{action}** | Entry: ₹{entry:.2f} |\n"
-            f"| **Target / SL** | ₹{target:.2f} / ₹{stoploss:.2f} | R:R = **{rr:.2f}:1** |\n"
-            f"| **Conviction Grade**| **{conviction}%** | **{grade}** |\n"
-            f"| **Historical Win-Rate**| **{t_wr}%** | Sample: {t_calls} logged calls |\n\n"
-            f"**Key Factor Attributions (SHAP Drivers):**\n"
+            f"### Empirical Risk Assessment: **{verdict}** (Calibration Score: {conviction}%)\n"
+            f"- **Instrument**: `{ticker}` ({action} setup @ ₹{entry:.2f} | Target ₹{target:.2f} | SL ₹{stoploss:.2f} | R:R **{rr:.2f}:1**)\n"
+            f"- **Historical Ticker Hit-Rate**: **{t_wr}%** across {t_calls} logged calls\n\n"
+            f"### Key Statistical Drivers\n"
             f"{shap_table}\n\n"
-            f"> ⚖️ **SEBI Advisory & Portfolio Rule**: Maximum recommended single-trade position sizing is **2.5% of total portfolio capital** with strict trailing stop loss execution."
+            f"*SEBI Non-Advisory Disclosure: This output is a mathematical simulation & historical audit for educational/research use only. MarketProbe is not a SEBI-registered Investment Adviser (IA) or Research Analyst (RA). Consult a SEBI-registered adviser before making any investment decision.*"
         )
 
         action_chips = [

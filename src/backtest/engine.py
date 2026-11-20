@@ -24,16 +24,15 @@ def run_backtest_engine():
     cur = conn.cursor()
     
     cur.execute('''
-        SELECT id, ticker, action, entry_price, target_price, stoploss_price 
+        SELECT id, ticker, action, entry_price, target_price, stoploss_price, call_timestamp 
         FROM recommendations 
         WHERE outcome_status = 'OPEN' OR outcome_status IS NULL
     ''')
     open_calls = cur.fetchall()
-    print(f"📊 Running deterministic tick-level backtest across {len(open_calls)} recommendations...")
+    print(f"[BACKTEST] Running deterministic tick-level audit across {len(open_calls)} open recommendations...")
     
     # Identify unique tickers
     unique_tickers = list(set(c[1] for c in open_calls if c[1] and (c[1].endswith('.NS') or c[1].startswith('^'))))
-    print(f"📈 Downloading historical OHLC data for {len(unique_tickers)} unique symbols...")
     
     price_cache = {}
     for sym in unique_tickers:
@@ -45,28 +44,38 @@ def run_backtest_engine():
         except Exception:
             pass
             
-    print(f"✅ Cached {len(price_cache)} price series. Simulating day-by-day path outcomes...")
-    
     updated_count = 0
     hit_count = 0
     miss_count = 0
     open_count = 0
     
-    for rec_id, ticker, action, entry, target, stoploss in open_calls:
+    for rec_id, ticker, action, entry, target, stoploss, call_ts in open_calls:
         if ticker not in price_cache:
             continue
             
         df = price_cache[ticker]
-        market_open = float(df['Open'].iloc[0])
+        # Strictly evaluate bars on/after call_timestamp to eliminate lookahead bias
+        if call_ts:
+            try:
+                call_dt = pd.to_datetime(call_ts).tz_localize(None)
+                idx_naive = df.index.tz_localize(None) if getattr(df.index, 'tz', None) is not None else df.index
+                df_post = df[idx_naive >= call_dt.normalize()]
+                if not df_post.empty:
+                    df = df_post
+            except Exception:
+                pass
 
+        market_open = float(df['Open'].iloc[0])
         entry_p = float(entry) if entry and entry > 1.0 else market_open
+
+        # Immutability guard: if stated entry diverges >50% from live open (e.g., corporate split),
+        # DO NOT silently overwrite original stated prices — skip re-labeling until split-adjusted.
         if market_open > 0 and abs(entry_p - market_open) / market_open > 0.50:
-            entry_p = market_open
-            target_p = entry_p * 1.08 if action == 'BUY' else entry_p * 0.92
-            stoploss_p = entry_p * 0.95 if action == 'BUY' else entry_p * 1.05
-        else:
-            target_p = float(target) if target and target > 1.0 and target != entry_p else (entry_p * 1.08 if action == 'BUY' else entry_p * 0.92)
-            stoploss_p = float(stoploss) if stoploss and stoploss > 1.0 and stoploss != entry_p else (entry_p * 0.95 if action == 'BUY' else entry_p * 1.05)
+            open_count += 1
+            continue
+
+        target_p = float(target) if target and target > 1.0 and target != entry_p else (entry_p * 1.08 if action == 'BUY' else entry_p * 0.92)
+        stoploss_p = float(stoploss) if stoploss and stoploss > 1.0 and stoploss != entry_p else (entry_p * 0.95 if action == 'BUY' else entry_p * 1.05)
         
         status = 'OPEN'
         peak_return = 0.0
@@ -146,16 +155,15 @@ def run_backtest_engine():
         peak_return = min(145.0, max(0.0, peak_return))
         max_drawdown = max(-55.0, min(0.0, max_drawdown))
 
+        # Preserve immutable stated entry/target/stoploss; update only outcome telemetry
         cur.execute('''
             UPDATE recommendations
-            SET entry_price = ?, target_price = ?, stoploss_price = ?,
-                risk_reward_ratio = ?, outcome_status = ?, actual_peak_return_pct = ?, 
+            SET outcome_status = ?, actual_peak_return_pct = ?, 
                 actual_max_drawdown_pct = ?, actual_exit_price = ?, holding_period_bars = ?, 
                 days_to_outcome = ?, labeled_at = datetime('now')
             WHERE id = ?
         ''', (
-            round(entry_p, 2), round(target_p, 2), round(stoploss_p, 2),
-            rr_ratio, status, round(peak_return, 2), round(max_drawdown, 2),
+            status, round(peak_return, 2), round(max_drawdown, 2),
             round(exit_price, 2), holding_bars, holding_bars, rec_id
         ))
         

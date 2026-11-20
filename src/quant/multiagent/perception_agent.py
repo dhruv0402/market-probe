@@ -17,7 +17,8 @@ from typing import Dict, Any, List, Optional
 from youtube_transcript_api import YouTubeTranscriptApi
 from pypdf import PdfReader
 
-DB_PATH = "/Users/dhruvgourisaria/marketprobe/data/marketprobe.db"
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+DB_PATH = os.environ.get("MARKETPROBE_DB_PATH", os.path.join(PROJECT_ROOT, "data", "marketprobe.db"))
 
 def extract_youtube_video_id(url_or_id: str) -> Optional[str]:
     """Extracts YouTube 11-char video ID from various link formats."""
@@ -159,18 +160,23 @@ def commit_new_recommendation_to_db(
         found_inf = cursor.fetchone()
         influencer_id = found_inf[0] if found_inf else 1
 
+    from src.quant.hygiene_supervisor import compute_proof_hash, classify_verification_tier, ensure_provenance_schema
+    ensure_provenance_schema(conn)
+
     now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    rr_ratio = round(abs(target - entry) / max(0.01, abs(entry - stoploss)), 2) if entry > 0 else 2.0
+    rr_ratio = round(min(6.0, max(0.3, abs(target - entry) / max(0.01, abs(entry - stoploss)))), 2) if entry > 0 else 2.0
+    ver_tier = classify_verification_tier(source_type, source_url, None)
+    proof_hash = compute_proof_hash(ticker, action, entry, target, stoploss, now_str, source_url)
 
     cursor.execute("""
         INSERT INTO recommendations (
             influencer_id, platform, source_url, ticker, action,
-            entry_price, target_price, stoploss_price, risk_reward_ratio,
-            call_timestamp, raw_quote, outcome_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN');
+            entry_price, stated_entry_price, target_price, stoploss_price, risk_reward_ratio,
+            call_timestamp, raw_quote, outcome_status, verification_tier, proof_hash
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?);
     """, (
         influencer_id, source_type, source_url, ticker, action,
-        entry, target, stoploss, rr_ratio, now_str, raw_quote[:300]
+        entry, entry, target, stoploss, rr_ratio, now_str, raw_quote[:300], ver_tier, proof_hash
     ))
     
     rec_id = cursor.lastrowid

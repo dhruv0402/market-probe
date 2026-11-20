@@ -48,7 +48,7 @@ async def process_copilot_query(message: str, user_id: str = "demo-trader") -> D
 
     # 2. Database Action Cycle
     from src.backend.copilot_actions import execute_copilot_tool_cycle
-    tool_res = execute_copilot_tool_cycle(message)
+    tool_res = execute_copilot_tool_cycle(message, user_id="usr_demo" if user_id == "demo-trader" else user_id)
     if tool_res:
         tool_res["customer_profile"] = {
             "risk_profile": profile.get("risk_profile"),

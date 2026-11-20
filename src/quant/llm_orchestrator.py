@@ -56,17 +56,17 @@ class LLMLoadBalancerRouter:
         self.gemini_key = os.getenv("GEMINI_API_KEY", "")
         self.nodes = [
             LLMWorkerNode(
-                name="gemini-3.5-flash-primary",
+                name="gemini-2.5-flash-primary",
                 provider="gemini",
-                model_name="gemini-3.5-flash",
-                endpoint="https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
+                model_name="gemini-2.5-flash",
+                endpoint="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
                 rpm_limit=60
             ),
             LLMWorkerNode(
-                name="gemini-3.5-flash-lite-secondary",
+                name="gemini-2.5-flash-lite-secondary",
                 provider="gemini",
-                model_name="gemini-3.5-flash-lite",
-                endpoint="https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+                model_name="gemini-2.5-flash-lite",
+                endpoint="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
                 rpm_limit=100
             ),
             LLMWorkerNode(

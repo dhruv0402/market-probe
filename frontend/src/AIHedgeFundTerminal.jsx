@@ -66,22 +66,22 @@ const INTENT_LABELS = {
 };
 
 const VOTE_LABELS = {
-  BULLISH: { text: 'Bullish', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
-  APPROVED: { text: 'Approved', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
-  COMPLIANT: { text: 'SEBI Compliant', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
-  CREDIBLE: { text: 'Credible Desk', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
+  BULLISH: { text: 'Positive Drift', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
+  APPROVED: { text: 'Within Risk Cap', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
+  COMPLIANT: { text: 'SEBI Registered', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
+  CREDIBLE: { text: 'High Empirical Rate', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
   HIGH_CONVICTION_EXECUTE: {
-    text: 'High-Conviction Execute',
+    text: 'High Statistical Alignment (Simulation)',
     cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40',
   },
   COUNCIL_RESTRUCTURED_BUY: {
-    text: 'Council-Restructured Buy',
+    text: 'Calibrated R:R Scenario',
     cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40',
   },
-  BEARISH_VETO: { text: 'Math Veto', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
-  RISK_VETO: { text: 'Risk Veto', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
+  BEARISH_VETO: { text: 'Math Flag', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
+  RISK_VETO: { text: 'Risk Cap Breach', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
   INSTITUTIONAL_VETO: {
-    text: 'Institutional Veto — Sub-Optimal Risk/Alpha',
+    text: 'High Stop-Out Risk Profile (Analytical Flag)',
     cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40',
   },
   SEBI_WARNING: { text: 'SEBI Flag', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
@@ -116,15 +116,15 @@ function getVoteMeta(code) {
 }
 
 const SHORT_AGENT_VOTES = {
-  BULLISH: { text: 'Bullish', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
-  APPROVED: { text: 'Approved', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
+  BULLISH: { text: 'Pos Drift', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
+  APPROVED: { text: 'Risk Pass', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
   COMPLIANT: { text: 'SEBI Pass', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
-  CREDIBLE: { text: 'Credible', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
-  HIGH_CONVICTION_EXECUTE: { text: 'Execute', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' },
-  COUNCIL_RESTRUCTURED_BUY: { text: 'Restructured', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' },
-  BEARISH_VETO: { text: 'Math Veto', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
-  RISK_VETO: { text: 'Risk Veto', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
-  INSTITUTIONAL_VETO: { text: 'Vetoed', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
+  CREDIBLE: { text: 'High Rate', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
+  HIGH_CONVICTION_EXECUTE: { text: 'Aligned', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' },
+  COUNCIL_RESTRUCTURED_BUY: { text: 'Calibrated', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' },
+  BEARISH_VETO: { text: 'Math Flag', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
+  RISK_VETO: { text: 'Risk Flag', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
+  INSTITUTIONAL_VETO: { text: 'High Risk', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
   SEBI_WARNING: { text: 'SEBI Flag', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
   UNRELIABLE_FLAG: { text: 'Low Edge', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
   AVERAGE: { text: 'Neutral', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/35' },

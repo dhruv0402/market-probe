@@ -11,7 +11,7 @@ export default function FinBotDrawer({ isOpen, onClose, onNavigateTab }) {
     {
       role: 'assistant',
       text: 'MarketProbe Copilot (FinBot Quant Engine) active. Ask any question regarding stock tip audits, influencer credibility, MPT portfolio weights, or Indian Section 112A tax harvesting.',
-      node: 'gemini-3.5-flash-router',
+      node: 'gemini-2.5-flash-router',
       action_chips: [
         { type: 'NAVIGATE_TAB', label: 'Explore Live Feed', tab: 'FEED' },
         { type: 'NAVIGATE_TAB', label: 'Open P&L Simulator', tab: 'SIMULATOR' },

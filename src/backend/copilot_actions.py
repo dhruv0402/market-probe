@@ -14,10 +14,10 @@ from typing import Dict, Any, List, Optional
 import httpx
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DB_PATH = os.path.join(PROJECT_ROOT, "data", "marketprobe.db")
-FINBOT_API_URL = os.environ.get("FINBOT_API_URL", "http://localhost:8000")
+DB_PATH = os.environ.get("MARKETPROBE_DB_PATH", os.path.join(PROJECT_ROOT, "data", "marketprobe.db"))
+FINBOT_API_URL = os.environ.get("FINBOT_API_URL", "http://localhost:8080")
 
-def execute_copilot_tool_cycle(message: str, user_id: Optional[int] = None) -> Dict[str, Any]:
+def execute_copilot_tool_cycle(message: str, user_id: Optional[str] = "usr_demo") -> Dict[str, Any]:
     """
     Analyzes intent, queries local MarketProbe DB / FinBot quant solvers,
     and returns rich conversational output along with interactive action chips.
@@ -31,17 +31,26 @@ def execute_copilot_tool_cycle(message: str, user_id: Optional[int] = None) -> D
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
-    # 1. Action: Add or Watchlist Action
+    # 1. Action: Real Watchlist Persistence (writes to SQLite user_watchlists)
     watchlist_match = re.search(r'(?:add|save|track|watch)\s+([A-Za-z0-9]+)\s+(?:to\s+(?:my\s+)?watchlist)', msg_low)
     if watchlist_match or any(w in msg_low for w in ["add to watchlist", "save to watchlist"]):
         ticker_candidate = watchlist_match.group(1).upper() if watchlist_match else None
         if not ticker_candidate:
             # find first ticker in message
-            t_match = re.search(r'\b(RELIANCE|TCS|INFY|TATAMOTORS|HDFCBANK|ICICIBANK|SBIN|ITC|WIPRO|LT)\b', message, re.IGNORECASE)
+            t_match = re.search(r'\b(RELIANCE|TCS|INFY|TATAMOTORS|HDFCBANK|ICICIBANK|SBIN|ITC|WIPRO|LT|BHARTIARTL)\b', message, re.IGNORECASE)
             if t_match:
                 ticker_candidate = t_match.group(1).upper()
 
         if ticker_candidate:
+            from src.backend.security import toggle_watchlist_item, get_user_watchlist
+            uid = str(user_id or "usr_demo")
+            existing = {item["symbol"].upper() for item in get_user_watchlist(uid)}
+            if ticker_candidate not in existing:
+                toggle_watchlist_item(uid, ticker_candidate, "Added via FinBot Copilot")
+                status_note = f"Persisted **{ticker_candidate}** to your SQLite watchlist."
+            else:
+                status_note = f"**{ticker_candidate}** is already tracked in your watchlist."
+
             ticker_ns = ticker_candidate if ticker_candidate.endswith(".NS") else f"{ticker_candidate}.NS"
             tool_executed = "mutate_watchlist"
             action_chips.append({
@@ -55,8 +64,9 @@ def execute_copilot_tool_cycle(message: str, user_id: Optional[int] = None) -> D
                 "label": f"Optimize Weights with {ticker_candidate}",
                 "tickers": [ticker_candidate, "RELIANCE", "TCS", "INFY"]
             })
+            conn.close()
             return {
-                "reply": f"Added **{ticker_ns}** to your active watchlist monitoring queue. Real-time NSE breakout alerts and influencer tip triggers are now primed.",
+                "reply": f"{status_note} Historical finfluencer tracking and alert triggers are synced.",
                 "tool_executed": tool_executed,
                 "action_chips": action_chips,
                 "source_node": "marketprobe-action-engine"

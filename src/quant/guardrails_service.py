@@ -95,10 +95,17 @@ class FinancialGuardrailEngine:
         disclaimer_needed = False
         lower = response_text.lower()
         if any(word in lower for word in ["guaranteed return", "100% risk free", "sure profit", "pakka profit"]):
-            response_text = re.sub(r"(?i)(guaranteed return|100% risk free|sure profit)", "projected historical return", response_text)
+            response_text = re.sub(r"(?i)(guaranteed return|100% risk free|sure profit|pakka profit)", "projected historical return", response_text)
             disclaimer_needed = True
 
-        if disclaimer_needed or "SEBI" not in response_text:
-            response_text += "\n\n*Disclaimer: Investments are subject to market risks. Quantitative projections are based on historical simulations and do not guarantee future returns.*"
+        # Enforce SEBI non-advisory boundary: neutralize direct order execution commands
+        response_text = re.sub(r"(?i)\b(execute long|execute short|buy immediately|strong buy now)\b", "historically analyzed scenario", response_text)
+
+        if disclaimer_needed or "not a SEBI-registered" not in response_text:
+            response_text += (
+                "\n\n*SEBI Non-Advisory Disclosure: Empirical analytics & historical simulation only. "
+                "MarketProbe is not a SEBI-registered Investment Adviser (IA) or Research Analyst (RA); "
+                "historical metrics do not guarantee future returns.*"
+            )
 
         return response_text

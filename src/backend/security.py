@@ -17,7 +17,9 @@ from typing import Optional, Dict, Any
 from fastapi import HTTPException, Security, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-SECRET_KEY = os.environ.get("MARKETPROBE_SECRET_KEY", "marketprobe-sec-prod-token-salt-987234982734")
+SECRET_KEY = os.environ.get("MARKETPROBE_SECRET_KEY", "marketprobe-local-dev-secret-change-in-prod")
+IS_PRODUCTION = os.environ.get("ENV", "").lower() == "production" or os.environ.get("RENDER", "").lower() == "true"
+ALLOW_DEMO_TOKEN = os.environ.get("MARKETPROBE_ALLOW_DEMO_TOKEN", "false" if IS_PRODUCTION else "true").lower() == "true"
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_SECONDS = 86400 * 7 # 7 days
 
@@ -268,8 +270,8 @@ def record_subscription(user_id: str, gateway: str, tier: str, amount: float, or
             INSERT INTO subscriptions (id, user_id, gateway, tier, status, order_id, payment_id, amount, currency)
             VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)
         ''', (sub_id, user_id, gateway, tier, order_id, payment_id, amount, currency))
-        # Update user's tier and role in users table
-        new_role = "institutional_admin" if tier == "enterprise" else "pro_trader"
+        # Update user's tier in users table (never self-escalate to institutional_admin via billing)
+        new_role = "enterprise_trader" if tier == "enterprise" else "pro_trader"
         cur.execute("UPDATE users SET tier = ?, role = ? WHERE id = ?", (tier, new_role, user_id))
         conn.commit()
         conn.close()
@@ -365,13 +367,13 @@ def create_jwt_token(payload: Dict[str, Any]) -> str:
     return f"{encoded_header}.{encoded_payload}.{encoded_signature}"
 
 def verify_jwt_token(token: str) -> Dict[str, Any]:
-    if token == "demo_jwt_token":
+    if ALLOW_DEMO_TOKEN and token == "demo_jwt_token":
         return {
             "sub": "usr_demo",
             "email": "demo@marketprobe.in",
             "name": "Institutional Quant Desk",
             "role": "pro_trader",
-            "tier": "enterprise",
+            "tier": "pro",
         }
     try:
         parts = token.split('.')

@@ -294,11 +294,125 @@ function OAuthModal({ open, onClose, onAuth }) {
 }
 
 /* ---------------------------------- INSTITUTIONAL TERMINAL BADGE ---------------------------------- */
+/* ---------------------------------- HONEST DATA FRESHNESS INDICATOR ---------------------------------- */
 function TerminalStatusIndicator() {
+  const [health, setHealth] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    const poll = () => {
+      api('/system/data-health')
+        .then((d) => { if (active) setHealth(d); })
+        .catch(() => {});
+    };
+    poll();
+    const iv = setInterval(poll, 30000);
+    return () => { active = false; clearInterval(iv); };
+  }, []);
+
+  const isLive = health?.quote_feed_status === 'LIVE_EXCHANGE';
+  const syncTime = health?.last_quote_sync ? String(health.last_quote_sync).slice(0, 5) : '';
+  const tooltip = health
+    ? `Feed: ${health.quote_feed_status} (last sync ${health.last_quote_sync || 'N/A'}) | Verified Primary Calls: ${health.verified_primary_calls} | Hygiene Anomalies: ${health.hygiene_anomalies_remaining}`
+    : 'Checking live exchange feed & data hygiene status...';
+
   return (
-    <div className="terminal-status-chip" title="NSE Direct Tick Feed Active">
-      <span className="live-dot" />
-      <span className="status-text">NSE LIVE</span>
+    <div
+      className="terminal-status-chip"
+      title={tooltip}
+      style={
+        isLive
+          ? undefined
+          : {
+              background: 'rgba(245, 158, 11, 0.1)',
+              borderColor: 'rgba(245, 158, 11, 0.35)',
+            }
+      }
+    >
+      <span
+        className="live-dot"
+        style={
+          isLive
+            ? undefined
+            : { background: '#f59e0b', boxShadow: '0 0 6px #f59e0b', animation: 'none' }
+        }
+      />
+      <span
+        className="status-text"
+        style={isLive ? undefined : { color: '#fbbf24' }}
+      >
+        {isLive ? 'NSE LIVE' : `SNAPSHOT${syncTime ? ` · ${syncTime}` : ''}`}
+      </span>
+    </div>
+  );
+}
+
+/* ---------------------------------- PROOF INSPECTOR MODAL ---------------------------------- */
+function ProofInspectorModal({ record, onClose }) {
+  if (!record) return null;
+  const tier = record.verification_tier || 'ARCHIVED_UNVERIFIED';
+  const isVerified = tier === 'VERIFIED_PRIMARY';
+  const hasRealUrl = record.source_url && /^https?:\/\//i.test(record.source_url) && !['https://www.youtube.com', 'https://www.nseindia.com', 'https://research.brokerage.com'].includes(record.source_url.toLowerCase());
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 640, padding: 24, background: '#0b0f17', border: '1px solid #243248' }}>
+        <div className="row between" style={{ marginBottom: 14, borderBottom: '1px solid var(--line)', paddingBottom: 12 }}>
+          <div className="row" style={{ gap: 8 }}>
+            <ShieldCheck size={18} color={isVerified ? '#34d399' : '#fbbf24'} />
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 16 }}>Primary-Source Proof &amp; Audit Record #{record.id}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--dim)', fontFamily: 'var(--mono)' }}>
+                SHA-256 Proof Hash: {record.proof_hash || 'UNHASHED'}
+              </div>
+            </div>
+          </div>
+          <button type="button" className="btn btn-ghost" style={{ padding: '4px 8px' }} onClick={onClose}>
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="row between" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+          <div className="row" style={{ gap: 8 }}>
+            <span className={`pill ${isVerified ? 'pill-hit' : 'pill-open'}`}>{tier.replace(/_/g, ' ')}</span>
+            <span className="pill pill-sebi">{record.platform}</span>
+            <span className={`pill ${record.action === 'BUY' ? 'pill-buy' : 'pill-sell'}`}>
+              {record.action} {String(record.ticker || '').replace('.NS', '')}
+            </span>
+          </div>
+          <span style={{ fontSize: 12, color: 'var(--dim)', fontFamily: 'var(--mono)' }}>
+            Logged: {String(record.timestamp || record.call_timestamp || 'N/A').slice(0, 19)}
+          </span>
+        </div>
+
+        <div className="levels" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 14 }}>
+          <div className="level"><small>Stated Entry</small><b>{inr(record.stated_entry_price || record.entry_price)}</b></div>
+          <div className="level"><small>Target</small><b style={{ color: 'var(--green2)' }}>{inr(record.target_price)}</b></div>
+          <div className="level"><small>Stop-Loss</small><b style={{ color: '#fb7185' }}>{inr(record.stoploss_price)}</b></div>
+          <div className="level"><small>Exchange Exit</small><b>{record.actual_exit_price ? inr(record.actual_exit_price) : 'Open / Pending'}</b></div>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--dim)', textTransform: 'uppercase', marginBottom: 6 }}>
+            Archived Primary Statement ({record.creator_name || 'Tracked Source'})
+          </div>
+          <div className="quote" style={{ fontSize: 13 }}>{record.quote || record.raw_quote || 'No verbatim transcript stored.'}</div>
+        </div>
+
+        <div className="row between" style={{ paddingTop: 12, borderTop: '1px solid var(--line)', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ fontSize: 11.5, color: 'var(--dim)' }}>
+            Outcome: <b style={{ color: 'var(--text)' }}>{record.outcome_status || record.status || 'OPEN'}</b>
+            {record.labeled_at ? ` · Resolved ${String(record.labeled_at).slice(0, 16)}` : ''}
+          </div>
+          {hasRealUrl ? (
+            <a href={record.source_url} target="_blank" rel="noreferrer" className="btn btn-primary" style={{ fontSize: 12, textDecoration: 'none' }}>
+              Open Primary Source <ExternalLink size={12} />
+            </a>
+          ) : (
+            <span style={{ fontSize: 11.5, color: '#fbbf24' }}>No deep primary URL archived for this legacy record</span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1488,15 +1602,11 @@ function Feed({ data, loading, error, onSelectStock, onAuditInCouncil }) {
                         href={`https://kite.zerodha.com/chart/ext/ciq/NSE/${a.ticker}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="btn btn-primary"
-                        style={{ padding: '3px 8px', fontSize: 10.5 }}
-                        title="Open on Zerodha Kite"
-                        onClick={() => {
-                          const payload = `${a.action} ${a.ticker} | CMP: ₹${a.current_price} | Entry: ₹${a.entry_price} | Target: ₹${a.target_price} | SL: ₹${a.stoploss_price}`;
-                          navigator.clipboard?.writeText(payload);
-                        }}
+                        className="btn btn-ghost"
+                        style={{ padding: '3px 8px', fontSize: 10.5, textDecoration: 'none' }}
+                        title="Open neutral exchange price chart (research only)"
                       >
-                        Trade on Kite
+                        Inspect Chart <ExternalLink size={10} />
                       </a>
                     </div>
                   </div>
@@ -1534,10 +1644,14 @@ function Feed({ data, loading, error, onSelectStock, onAuditInCouncil }) {
           </p>
         </div>
         <div className="hero-ring">
-          <div className="card" style={{ padding: '16px 20px', textAlign: 'center', background: 'rgba(16,185,129,0.06)', borderColor: 'rgba(16,185,129,0.2)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--green2)' }}>MODEL WIN-RATE GATE</div>
-            <div style={{ fontSize: 30, fontWeight: 900, color: 'var(--text)', marginTop: 4 }}>75.4%</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>On conv &gt; 60%</div>
+          <div className="card" style={{ padding: '14px 18px', textAlign: 'center', background: 'rgba(16,185,129,0.06)', borderColor: 'rgba(16,185,129,0.2)' }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--green2)', letterSpacing: 0.6 }}>VERIFIED PRIMARY PROOF</div>
+            <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--text)', marginTop: 4, fontFamily: 'var(--mono)' }}>
+              {s.total_tips_tracked ? `${(( (s.verified_primary_calls || 0) / s.total_tips_tracked ) * 100).toFixed(1)}%` : '—'}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+              {fmt(s.verified_primary_calls)} primary-source calls
+            </div>
           </div>
         </div>
       </div>
@@ -1872,9 +1986,11 @@ function Rankings() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow"><Trophy size={13} /> Verified Leaderboard & Accountability</div>
-          <h1 className="mp-h1">Influencer Rankings & Hall of Shame</h1>
-          <p className="mp-sub">Ranked rigorously by empirical accuracy, verified profit factors, and risk control — never subscriber count.</p>
+          <div className="eyebrow"><Trophy size={13} /> Empirical Accountability &amp; Statistical Calibration</div>
+          <h1 className="mp-h1">Empirical Track-Record Ledger</h1>
+          <p className="mp-sub">
+            Ranked transparently by Empirical Bayes shrinkage hit-rate with 95% Wilson confidence intervals. Synthetic benchmarks are excluded; figures report historical resolved outcomes only and are not an endorsement or critique of any individual.
+          </p>
         </div>
       </div>
 
@@ -1936,9 +2052,10 @@ function Rankings() {
                 <th>Platform</th>
                 <th>SEBI Reg</th>
                 <th>Audited Calls</th>
-                <th>Win Rate</th>
+                <th>Raw Hit Rate</th>
+                <th>Wilson 95% CI</th>
                 <th>Max Drawdown</th>
-                <th>Trust Score</th>
+                <th>Bayes Score</th>
                 <th>Grade</th>
                 <th>Audit Report</th>
               </tr>
@@ -1964,13 +2081,16 @@ function Rankings() {
                   </td>
                   <td className="num">{r.total_calls}</td>
                   <td className="num" style={{ color: r.win_rate >= 50 ? 'var(--green2)' : '#fb7185', fontWeight: 800 }}>{r.win_rate}%</td>
+                  <td className="num" style={{ color: 'var(--muted)', fontSize: 12 }}>
+                    {r.wilson_low != null ? `[${r.wilson_low}% – ${r.wilson_high}%]` : '—'}
+                  </td>
                   <td className="num" style={{ color: '#fb7185' }}>{r.max_drawdown}%</td>
                   <td>
                     <div className="row">
-                      <div className="bar" style={{ width: 80 }}>
-                        <i style={{ width: `${r.trust_score}%`, background: r.trust_score >= 80 ? 'var(--green)' : 'var(--blue)' }} />
+                      <div className="bar" style={{ width: 70 }}>
+                        <i style={{ width: `${r.bayes_win_rate || r.trust_score}%`, background: (r.bayes_win_rate || r.trust_score) >= 60 ? 'var(--green)' : 'var(--blue)' }} />
                       </div>
-                      <span className="num" style={{ fontWeight: 700 }}>{r.trust_score}</span>
+                      <span className="num" style={{ fontWeight: 700 }}>{r.bayes_win_rate != null ? `${r.bayes_win_rate}%` : r.trust_score}</span>
                     </div>
                   </td>
                   <td><span className={`pill ${r.grade === 'A' ? 'pill-hit' : r.grade === 'F' || r.grade === 'D' ? 'pill-miss' : 'pill-open'}`}>{r.grade}</span></td>
@@ -2461,18 +2581,14 @@ function WatchlistComponent() {
                     <ShieldCheck size={12} color="var(--green2)" /> Verified Tick Replay
                   </span>
                   <a
-                    href={`https://kite.zerodha.com/marketwatch?search=${encodeURIComponent(it.symbol)}`}
+                    href={`https://kite.zerodha.com/chart/ext/ciq/NSE/${encodeURIComponent(it.symbol)}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="btn btn-primary"
-                    style={{ padding: '6px 12px', fontSize: 11.5, gap: 5, textDecoration: 'none', background: '#ff5722', borderColor: '#ff5722' }}
-                    title="Open on Zerodha Kite and copy order payload"
-                    onClick={() => {
-                      const payload = `BUY ${it.symbol} | CMP: ₹${it.current_price || ''} | Target: ₹${it.avg_target || ''}`;
-                      navigator.clipboard?.writeText(payload);
-                    }}
+                    className="btn btn-ghost"
+                    style={{ padding: '5px 11px', fontSize: 11.5, gap: 5, textDecoration: 'none' }}
+                    title="Inspect neutral NSE chart (research only)"
                   >
-                    <span>⚡ Trade on Kite</span>
+                    <span>Inspect Chart</span>
                     <ExternalLink size={11} />
                   </a>
                 </div>
@@ -2652,6 +2768,12 @@ function Dataset({ onAuditInCouncil }) {
   const [busy, setBusy] = useState(false);
   const [ingesting, setIngesting] = useState(false);
   const [ingestMsg, setIngestMsg] = useState('');
+  const [health, setHealth] = useState(null);
+  const [proofRecord, setProofRecord] = useState(null);
+
+  const loadHealth = () => {
+    api('/system/data-health').then(setHealth).catch(() => {});
+  };
 
   const loadData = () => {
     setBusy(true);
@@ -2660,6 +2782,10 @@ function Dataset({ onAuditInCouncil }) {
       .catch(() => setRows([]))
       .finally(() => setBusy(false));
   };
+
+  useEffect(() => {
+    loadHealth();
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(loadData, 250);
@@ -2671,10 +2797,14 @@ function Dataset({ onAuditInCouncil }) {
     setIngestMsg('');
     try {
       const res = await api('/pipeline/run', { method: 'POST' });
-      setIngestMsg(`Ingested ${res.pipeline_summary?.ingested_count || 4} fresh recommendations.`);
+      const h = res.pipeline_summary?.hygiene_summary;
+      setIngestMsg(
+        `Hygiene & proof audit done: ${h?.anomalies_remaining ?? 0} anomalies | ${res.pipeline_summary?.evaluated_open_calls ?? 0} open calls re-checked.`
+      );
       loadData();
+      loadHealth();
     } catch (err) {
-      setIngestMsg(`Error: ${err.message || 'Pipeline trigger failed'}`);
+      setIngestMsg(`Error: ${err.message || 'Hygiene audit failed'}`);
     } finally {
       setIngesting(false);
     }
@@ -2684,11 +2814,40 @@ function Dataset({ onAuditInCouncil }) {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow"><Database size={13} /> Master Repository</div>
-          <h1 className="mp-h1">Raw Audit Dataset</h1>
-          <p className="mp-sub">Full immutable registry of every analyzed recommendation, timestamps, and verifiable source links.</p>
+          <div className="eyebrow"><Database size={13} /> Master Provenance &amp; Hygiene Ledger</div>
+          <h1 className="mp-h1">Raw Audit Dataset &amp; Proof Standard</h1>
+          <p className="mp-sub">Immutable registry with SHA-256 proof hashes, primary-source verification tiers, and automated data hygiene verification.</p>
         </div>
       </div>
+
+      {health && (
+        <div className="stats" style={{ marginBottom: 16 }}>
+          <div className="card stat" style={{ padding: '14px 18px' }}>
+            <div className="stat-label">Verified Primary Proof</div>
+            <div className="stat-val num" style={{ fontSize: 24, color: 'var(--green2)' }}>{fmt(health.verified_primary_calls)}</div>
+            <div className="stat-foot">Of {fmt(health.total_recommendations)} total rows</div>
+          </div>
+          <div className="card stat" style={{ padding: '14px 18px' }}>
+            <div className="stat-label">Synthetic Excluded</div>
+            <div className="stat-val num" style={{ fontSize: 24, color: 'var(--amber)' }}>{fmt(health.synthetic_excluded_calls)}</div>
+            <div className="stat-foot">Quarantined from creator scores</div>
+          </div>
+          <div className="card stat" style={{ padding: '14px 18px' }}>
+            <div className="stat-label">Data Hygiene Anomalies</div>
+            <div className="stat-val num" style={{ fontSize: 24, color: health.hygiene_anomalies_remaining === 0 ? 'var(--green2)' : '#fb7185' }}>
+              {health.hygiene_anomalies_remaining}
+            </div>
+            <div className="stat-foot">Checked {health.last_hygiene_run_utc ? String(health.last_hygiene_run_utc).slice(11, 19) + ' UTC' : 'recently'}</div>
+          </div>
+          <div className="card stat" style={{ padding: '14px 18px' }}>
+            <div className="stat-label">Market Feed Freshness</div>
+            <div className="stat-val num" style={{ fontSize: 20, color: health.quote_feed_status === 'LIVE_EXCHANGE' ? 'var(--green2)' : '#fbbf24', marginTop: 4 }}>
+              {health.quote_feed_status === 'LIVE_EXCHANGE' ? 'LIVE EXCHANGE' : 'CACHED SNAPSHOT'}
+            </div>
+            <div className="stat-foot">Last sync {health.last_quote_sync || 'N/A'}</div>
+          </div>
+        </div>
+      )}
 
       <div className="toolbar">
         <div className="input search">
@@ -2697,15 +2856,15 @@ function Dataset({ onAuditInCouncil }) {
         </div>
         {busy && <Loader2 size={16} className="spin" />}
         
-        {/* 1-Click Live Ingestion Pipeline Trigger */}
+        {/* 1-Click Automated Hygiene & Verification Audit */}
         <button 
           className="btn btn-primary" 
           onClick={triggerLivePipeline} 
           disabled={ingesting}
-          title="Run live data crawler against NSE & YouTube/X feeds"
+          title="Run automated data hygiene, SHA-256 proof hashing, and exchange outcome verification"
         >
-          {ingesting ? <Loader2 size={15} className="spin" /> : <Zap size={15} />}
-          {ingesting ? 'Crawling Feeds...' : 'Trigger Live Ingestion Pipeline'}
+          {ingesting ? <Loader2 size={15} className="spin" /> : <ShieldCheck size={15} />}
+          {ingesting ? 'Auditing Ledger...' : 'Run Hygiene & Proof Audit'}
         </button>
 
         <a 
@@ -2737,7 +2896,7 @@ function Dataset({ onAuditInCouncil }) {
               <th>Target Price</th>
               <th>Stop Loss</th>
               <th>Outcome</th>
-              <th>Council</th>
+              <th>Proof &amp; Audit</th>
             </tr>
           </thead>
           <tbody>
@@ -2753,25 +2912,36 @@ function Dataset({ onAuditInCouncil }) {
                 <td className="num" style={{ color: '#fb7185' }}>{inr(r.stoploss_price)}</td>
                 <td><span className={`pill ${r.outcome_status === 'HIT' ? 'pill-hit' : r.outcome_status === 'MISS' ? 'pill-miss' : 'pill-open'}`}>{r.outcome_status}</span></td>
                 <td>
-                  {onAuditInCouncil && (
+                  <div className="row" style={{ gap: 6 }}>
                     <button
                       type="button"
                       className="btn btn-ghost"
-                      style={{ padding: '4px 9px', fontSize: 11, color: '#38bdf8', borderColor: 'rgba(56,189,248,0.35)' }}
-                      onClick={() =>
-                        onAuditInCouncil({
-                          ticker: r.ticker,
-                          action: r.action,
-                          entry_price: r.entry_price,
-                          target_price: r.target_price,
-                          stoploss_price: r.stoploss_price,
-                          creator_name: r.creator_name,
-                        })
-                      }
+                      style={{ padding: '4px 8px', fontSize: 11 }}
+                      onClick={() => setProofRecord(r)}
+                      title={`Tier: ${r.verification_tier || 'ARCHIVED'} | Hash: ${r.proof_hash || ''}`}
                     >
-                      <Activity size={11} /> Audit
+                      <ShieldCheck size={11} /> Proof
                     </button>
-                  )}
+                    {onAuditInCouncil && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        style={{ padding: '4px 8px', fontSize: 11, color: '#38bdf8', borderColor: 'rgba(56,189,248,0.35)' }}
+                        onClick={() =>
+                          onAuditInCouncil({
+                            ticker: r.ticker,
+                            action: r.action,
+                            entry_price: r.entry_price,
+                            target_price: r.target_price,
+                            stoploss_price: r.stoploss_price,
+                            creator_name: r.creator_name,
+                          })
+                        }
+                      >
+                        <Activity size={11} /> Audit
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -2779,6 +2949,8 @@ function Dataset({ onAuditInCouncil }) {
         </table>
         {!busy && rows.length === 0 && <div className="empty">No database records found.</div>}
       </div>
+
+      <ProofInspectorModal record={proofRecord} onClose={() => setProofRecord(null)} />
 
       <div className="row" style={{ justifyContent: 'flex-end', marginTop: 14 }}>
         <button className="btn btn-ghost" disabled={page === 0} onClick={() => setPage(page - 1)}>← Previous 25</button>
@@ -3218,6 +3390,29 @@ export default function MarketProbeApp() {
         {tab === 'BILLING' && <BillingComponent user={user} onUserUpdate={(u) => setUser(u)} />}
         {tab === 'HOW' && <How startTour={startTour} />}
       </main>
+
+      {/* Persistent Statutory SEBI Non-Advisory Disclosure Bar */}
+      <footer
+        style={{
+          borderTop: '1px solid var(--line)',
+          background: '#05080d',
+          padding: '10px 20px',
+          fontSize: '11px',
+          color: '#64748b',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '8px',
+        }}
+      >
+        <span>
+          <b style={{ color: '#94a3b8' }}>SEBI Non-Advisory Disclosure:</b> MarketProbe is an empirical performance-auditing, primary-source verification, and quantitative simulation platform. It is <b style={{ color: '#cbd5e1' }}>not</b> a SEBI-registered Investment Adviser (IA) or Research Analyst (RA) and does not provide buy/sell recommendations.
+        </span>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: '10.5px', color: '#475569' }}>
+          Proof Standard: Empirical Bayes + Wilson 95% CI • SHA-256 Ledger
+        </span>
+      </footer>
 
       {/* Global Slide-Out Floating FinBot Copilot Drawer */}
       <FinBotDrawer 

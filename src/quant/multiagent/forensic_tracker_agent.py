@@ -8,11 +8,13 @@ Implements mathematical credibility assessment:
 4. Direct lookup across MarketProbe's 2,452 audited calls database.
 """
 
+import os
 import sqlite3
 import numpy as np
 from typing import Dict, Any, Optional
 
-DB_PATH = "/Users/dhruvgourisaria/marketprobe/data/marketprobe.db"
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+DB_PATH = os.environ.get("MARKETPROBE_DB_PATH", os.path.join(PROJECT_ROOT, "data", "marketprobe.db"))
 
 # Empirical prior across entire 2,452 call universe
 # Mean win rate ~ 48.5%, beta prior parameters

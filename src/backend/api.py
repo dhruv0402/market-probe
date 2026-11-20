@@ -59,19 +59,37 @@ from fastapi import Response, Depends
 DB_PATH = os.environ.get("MARKETPROBE_DB_PATH", os.path.join(BASE_DIR, "data", "marketprobe.db"))
 MODEL_PATH = os.environ.get("MARKETPROBE_MODEL_PATH", os.path.join(BASE_DIR, "data", "xgb_model.pkl"))
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def _lifespan(application: FastAPI):
+    """Starts unified automated hygiene supervisor and warms FAISS vector index."""
+    from src.quant.background_scheduler import run_continuous_ingestion_loop
+    from src.quant.rag_service import _initialize_index
+
+    threading.Thread(target=_initialize_index, daemon=True).start()
+    bg_task = asyncio.create_task(run_continuous_ingestion_loop(interval_seconds=1800))
+    print("[LIFESPAN] Automated Hygiene Supervisor & FAISS Index Warmup initialized.")
+    try:
+        yield
+    finally:
+        bg_task.cancel()
+
 app = FastAPI(
-    title="MarketProbe High-Efficiency API",
-    description="High-throughput financial auditing engine with Bayesian conviction gating, WebSockets, and vectorized analytics",
-    version="4.0.0"
+    title="MarketProbe Empirical Auditing & Quant Analytics API",
+    description="Empirical finfluencer performance verification, forensic provenance auditing, and quantitative risk simulation (Non-Advisory).",
+    version="4.1.0",
+    lifespan=_lifespan,
 )
 
 cors_origins_env = os.environ.get("CORS_ORIGINS", "*")
 allowed_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+_is_wildcard_cors = (not allowed_origins) or (allowed_origins == ["*"])
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins if allowed_origins else ["*"],
-    allow_credentials=True,
+    allow_origins=["*"] if _is_wildcard_cors else allowed_origins,
+    allow_credentials=not _is_wildcard_cors,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -147,10 +165,12 @@ class ConnectionManager:
 ws_manager = ConnectionManager()
 
 # -------------------------------------------------------------
-# 2. REAL-TIME LIVE MARKET SYNC ENGINE
+# 2. REAL-TIME LIVE MARKET SYNC ENGINE (WITH HONEST FRESHNESS TELEMETRY)
 # -------------------------------------------------------------
 LIVE_QUOTES_CACHE = {}
 LAST_SYNC_TIMESTAMP = ""
+LAST_SYNC_EPOCH = 0.0
+LIVE_FEED_IS_REAL = False
 
 SYMBOLS_MAPPING = {
     "NIFTY 50": {"yf": "^NSEI", "name": "NIFTY 50 Benchmark", "tier": "NIFTY 50 BENCHMARK", "base": 23989.0},
@@ -169,8 +189,9 @@ SYMBOLS_MAPPING = {
 }
 
 def sync_live_market_data():
-    global LIVE_QUOTES_CACHE, LAST_SYNC_TIMESTAMP
+    global LIVE_QUOTES_CACHE, LAST_SYNC_TIMESTAMP, LAST_SYNC_EPOCH, LIVE_FEED_IS_REAL
     yf_list = [v["yf"] for v in SYMBOLS_MAPPING.values()]
+    live_hits = 0
     try:
         df = yf.download(yf_list, period="2d", interval="1m", progress=False)
         now_str = datetime.now().strftime("%H:%M:%S")
@@ -189,9 +210,11 @@ def sync_live_market_data():
                 if len(series) >= 2:
                     curr_p = float(series.iloc[-1])
                     prev_p = float(series.iloc[-2])
+                    live_hits += 1
                 elif len(series) == 1:
                     curr_p = float(series.iloc[0])
                     prev_p = meta["base"]
+                    live_hits += 1
                 else:
                     curr_p = meta["base"]
                     prev_p = meta["base"]
@@ -210,7 +233,8 @@ def sync_live_market_data():
                     "is_positive": is_pos,
                     "day_high": day_high,
                     "day_low": day_low,
-                    "last_updated": now_str
+                    "last_updated": now_str,
+                    "is_live": len(series) >= 1,
                 }
             except Exception:
                 base = meta["base"]
@@ -219,34 +243,38 @@ def sync_live_market_data():
                     "name": meta["name"],
                     "tier": meta["tier"],
                     "price": base,
-                    "change_pct": 0.42 if sym_name != "INFY" else -0.40,
-                    "is_positive": sym_name != "INFY",
+                    "change_pct": 0.0,
+                    "is_positive": True,
                     "day_high": round(base * 1.015, 2),
                     "day_low": round(base * 0.985, 2),
-                    "last_updated": now_str
+                    "last_updated": now_str,
+                    "is_live": False,
                 }
         LIVE_QUOTES_CACHE = updated
         LAST_SYNC_TIMESTAMP = now_str
-    except Exception as e:
+        LAST_SYNC_EPOCH = time.time()
+        LIVE_FEED_IS_REAL = live_hits >= 3
+    except Exception:
         now_str = datetime.now().strftime("%H:%M:%S")
         updated = {}
         for sym_name, meta in SYMBOLS_MAPPING.items():
             base = meta["base"]
-            is_pos = sym_name not in ["INFY", "TCS", "BHARTIARTL"]
-            chg = 0.82 if sym_name == "RELIANCE" else (1.37 if sym_name == "HDFCBANK" else (-0.40 if sym_name == "INFY" else 0.42))
             updated[sym_name] = {
                 "ticker": sym_name,
                 "name": meta["name"],
                 "tier": meta["tier"],
                 "price": base,
-                "change_pct": chg,
-                "is_positive": is_pos,
+                "change_pct": 0.0,
+                "is_positive": True,
                 "day_high": round(base * 1.015, 2),
                 "day_low": round(base * 0.985, 2),
-                "last_updated": now_str
+                "last_updated": now_str,
+                "is_live": False,
             }
         LIVE_QUOTES_CACHE = updated
         LAST_SYNC_TIMESTAMP = now_str
+        LAST_SYNC_EPOCH = time.time()
+        LIVE_FEED_IS_REAL = False
 
 sync_live_market_data()
 
@@ -448,9 +476,10 @@ def explain_ai_conviction_score(
     return {
         "conviction_score": score,
         "is_high_conviction": is_high,
-        "grade": "A+ (Institutional Alpha)" if score >= 75 else ("A (High Conviction)" if score >= 60 else ("B (Moderate)" if score >= 45 else "C (High Stopout Noise)")),
-        "verdict": "APPROVED & GATED (75% Realized Win Rate Tier)" if is_high else "FILTERED NOISE (High Probability Stopout)",
-        "recommendation": "EXECUTE LONG" if (is_high and target > entry) else ("EXECUTE SHORT" if is_high else "PASS / DO NOT TRADE"),
+        "grade": "Tier A+ (Strong Historical Calibration)" if score >= 75 else ("Tier A (High Empirical Alignment)" if score >= 60 else ("Tier B (Moderate Profile)" if score >= 45 else "Tier C (High Stop-Out Noise)")),
+        "verdict": "HIGH CALIBRATION TIER (HISTORICAL SIMULATION ONLY)" if is_high else "HIGH STOP-OUT NOISE PROFILE (ANALYTICAL ONLY)",
+        "recommendation": "HISTORICALLY FAVORABLE R:R PROFILE (LONG)" if (is_high and target > entry) else ("HISTORICALLY FAVORABLE R:R PROFILE (SHORT)" if is_high else "UNFAVORABLE RISK-REWARD PROFILE (ANALYTICAL)"),
+        "sebi_disclaimer": "Empirical simulation & historical calibration only. MarketProbe is not a SEBI-registered Investment Adviser (IA) or Research Analyst (RA).",
         "expected_value_inr": round((target - entry) * (score/100) - (entry - stoploss) * (1 - score/100), 2),
         "factors": factors
     }
@@ -721,24 +750,31 @@ def create_checkout_order(req: CreateOrderRequest, user: dict = Depends(require_
 
 @app.post("/api/billing/verify-payment")
 def verify_payment(req: VerifyPaymentRequest, user: dict = Depends(require_auth)):
-    # 1. Cryptographic Signature Verification (Razorpay / Stripe)
+    # 1. Cryptographic Signature Verification (Mandatory in Production)
     razorpay_secret = os.environ.get("RAZORPAY_KEY_SECRET")
     stripe_secret = os.environ.get("STRIPE_WEBHOOK_SECRET")
+    is_prod = os.environ.get("ENV", "").lower() == "production" or os.environ.get("RENDER", "").lower() == "true"
+    allow_demo_billing = os.environ.get("MARKETPROBE_DEMO_MODE", "false" if is_prod else "true").lower() == "true"
 
-    if req.gateway == "razorpay" and razorpay_secret:
-        if not req.signature:
-            raise HTTPException(status_code=400, detail="Missing required Razorpay signature.")
-        msg = f"{req.order_id}|{req.payment_id}".encode("utf-8")
-        expected_sig = hmac.new(razorpay_secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expected_sig, req.signature):
-            raise HTTPException(status_code=400, detail="Invalid Razorpay payment signature.")
-    elif req.gateway == "stripe" and stripe_secret:
-        if not req.signature:
-            raise HTTPException(status_code=400, detail="Missing required Stripe payment signature.")
-        # Stripe signature verification
-        expected_sig = hmac.new(stripe_secret.encode("utf-8"), req.payment_id.encode("utf-8"), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expected_sig, req.signature):
-            raise HTTPException(status_code=400, detail="Invalid Stripe payment signature.")
+    if req.gateway == "razorpay":
+        if razorpay_secret:
+            if not req.signature:
+                raise HTTPException(status_code=400, detail="Missing required Razorpay HMAC signature.")
+            msg = f"{req.order_id}|{req.payment_id}".encode("utf-8")
+            expected_sig = hmac.new(razorpay_secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(expected_sig, req.signature):
+                raise HTTPException(status_code=400, detail="Invalid Razorpay payment signature.")
+        elif not allow_demo_billing:
+            raise HTTPException(status_code=503, detail="Razorpay secret not configured for production checkout.")
+    elif req.gateway == "stripe":
+        if stripe_secret:
+            if not req.signature:
+                raise HTTPException(status_code=400, detail="Missing required Stripe payment signature.")
+            expected_sig = hmac.new(stripe_secret.encode("utf-8"), req.payment_id.encode("utf-8"), hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(expected_sig, req.signature):
+                raise HTTPException(status_code=400, detail="Invalid Stripe payment signature.")
+        elif not allow_demo_billing:
+            raise HTTPException(status_code=503, detail="Stripe webhook secret not configured for production checkout.")
 
     # 2. Persist the confirmed transaction and auto-upgrade user tier
     res = record_subscription(
@@ -909,7 +945,7 @@ def get_saved_calls(user: dict = Depends(require_auth)):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
-        cur.execute("SELECT * FROM recommendations ORDER BY date DESC")
+        cur.execute("SELECT * FROM recommendations ORDER BY call_timestamp DESC")
         for row in cur.fetchall():
             rec = dict(row)
             if str(rec.get("id")) in saved_ids:
@@ -958,13 +994,29 @@ def health_check():
         "live_quotes_synced": len(LIVE_QUOTES_CACHE) > 0
     }
 
+@app.get("/api/system/data-health")
+def get_system_data_health():
+    """Returns transparent live quote freshness, primary-source provenance counts, and data hygiene health."""
+    from src.quant.hygiene_supervisor import get_data_health_report
+    return get_data_health_report(
+        live_feed_is_real=LIVE_FEED_IS_REAL,
+        last_quote_sync_epoch=LAST_SYNC_EPOCH,
+        last_quote_sync_str=LAST_SYNC_TIMESTAMP,
+        quotes_cached=len(LIVE_QUOTES_CACHE),
+    )
+
 @app.get("/api/quotes")
 @app.get("/api/live-quotes")
 def get_live_quotes(force_refresh: bool = False):
     if force_refresh:
         sync_live_market_data()
+    age_s = round(max(0.0, time.time() - LAST_SYNC_EPOCH), 1) if LAST_SYNC_EPOCH > 0 else None
+    feed_status = "LIVE_EXCHANGE" if (LIVE_FEED_IS_REAL and age_s is not None and age_s < 300) else "CACHED_SNAPSHOT"
     return {
-        "status": "LIVE_DIRECT_NSE_SYNC",
+        "status": feed_status,
+        "feed_status": feed_status,
+        "is_live_exchange": LIVE_FEED_IS_REAL,
+        "age_seconds": age_s,
         "last_sync": LAST_SYNC_TIMESTAMP,
         "quotes": LIVE_QUOTES_CACHE,
         "quotes_list": [
@@ -976,7 +1028,8 @@ def get_live_quotes(force_refresh: bool = False):
                 "is_positive": v["is_positive"],
                 "day_high": v["day_high"],
                 "day_low": v["day_low"],
-                "last_updated": v["last_updated"]
+                "last_updated": v["last_updated"],
+                "is_live": v.get("is_live", False),
             }
             for k, v in LIVE_QUOTES_CACHE.items()
         ]
@@ -1043,7 +1096,7 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
             "sell_calls": r["sell_count"],
             "bullish_pct": buy_pct,
             "bearish_pct": 100 - buy_pct,
-            "consensus": "Strong Buy" if buy_pct >= 75 else ("Buy" if buy_pct >= 55 else ("Neutral" if buy_pct >= 40 else "Sell")),
+            "consensus": "Strongly Bullish Calls" if buy_pct >= 75 else ("Bullish Call Tilt" if buy_pct >= 55 else ("Mixed Calls" if buy_pct >= 40 else "Bearish Call Tilt")),
             "avg_price": avg_p,
             "avg_target": avg_tgt,
             "upside_pct": round(((avg_tgt - avg_p) / avg_p) * 100, 1),
@@ -1051,17 +1104,20 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
             "recent_accuracy": round((r["hits"] / max(1, r["hits"] + r["misses"])) * 100, 1)
         })
 
-    # Recent Live Tips with AI Conviction Scoring (exclude raw index tickers from stock feed)
+    # Recent Live Tips with AI Conviction Scoring & Primary-Source Provenance (exclude synthetic benchmarks & raw indexes)
     cur.execute('''
         SELECT 
-            r.id, r.influencer_id, r.ticker, r.company_name, r.action, r.entry_price, r.target_price, r.stoploss_price,
-            r.risk_reward_ratio, r.outcome_status, r.actual_peak_return_pct, r.actual_max_drawdown_pct,
+            r.id, r.influencer_id, r.ticker, r.company_name, r.action, r.entry_price, r.stated_entry_price,
+            r.target_price, r.stoploss_price, r.risk_reward_ratio, r.outcome_status,
+            r.actual_peak_return_pct, r.actual_max_drawdown_pct, r.actual_exit_price, r.labeled_at,
+            r.verification_tier, r.proof_hash,
             r.raw_quote, r.call_timestamp, r.source_url, r.platform, r.video_id, r.video_title, r.thumbnail_url, r.timestamp_seconds, r.timestamp_str,
             r.tweet_id, r.telegram_channel, r.broker_desk,
             i.name as creator_name, i.handle as creator_handle, i.is_sebi_registered, i.sebi_reg_no, i.approx_subscribers
         FROM recommendations r
         LEFT JOIN influencers i ON r.influencer_id = i.id
         WHERE r.ticker IS NOT NULL AND r.ticker NOT LIKE '^%' AND r.entry_price >= 15
+          AND COALESCE(r.verification_tier, 'VERIFIED_PRIMARY') != 'SYNTHETIC_BENCHMARK'
         ORDER BY r.id DESC
         LIMIT 100
     ''')
@@ -1076,10 +1132,12 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
         tier = get_index_tier(r["ticker"] or "")
         
         platform = r["platform"] or "YouTube"
-        vid_id = r["video_id"] or ("OGcyDEj-qYo" if platform == "YouTube" else None)
-        ts_sec = r["timestamp_seconds"] or (240 if platform == "YouTube" else 0)
-        ts_str = r["timestamp_str"] or ("04:00" if platform == "YouTube" else "Direct Call")
-        src_url = r["source_url"] or (f"https://www.youtube.com/watch?v={vid_id}&t={ts_sec}s" if vid_id else "#")
+        # Anti-defamation / Proof Standard: NEVER fabricate fallback video IDs for unlinked records
+        raw_vid = (r["video_id"] or "").strip()
+        vid_id = raw_vid if (len(raw_vid) == 11 and raw_vid != "OGcyDEj-qYo") else None
+        ts_sec = r["timestamp_seconds"] or 0
+        ts_str = r["timestamp_str"] or ("Timestamped Clip" if vid_id else "Archived Record")
+        src_url = r["source_url"] or (f"https://www.youtube.com/watch?v={vid_id}&t={ts_sec}s" if vid_id else None)
         thumb_url = r["thumbnail_url"] or (f"https://img.youtube.com/vi/{vid_id}/hqdefault.jpg" if vid_id else None)
 
         ai_conviction = compute_ai_conviction_score(
@@ -1095,12 +1153,11 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
         if min_conviction > 0 and ai_conviction < min_conviction:
             continue
         
-        # Zerodha Kite execution deep link
-        kite_action = "BUY" if (r["action"] or "").upper() == "BUY" else "SELL"
+        # Neutral exchange chart inspection link (no order execution solicitation)
         kite_url = f"https://kite.zerodha.com/chart/ext/ciq/NSE/{t_clean}"
         
         is_sebi = bool(r["is_sebi_registered"])
-        sebi_risk = "LOW_RISK" if is_sebi else "UNREGISTERED_CAUTION"
+        sebi_risk = "SEBI_REGISTERED_ENTITY" if is_sebi else "UNREGISTERED_SOURCE"
 
         recent_tips.append({
             "id": r["id"],
@@ -1109,16 +1166,21 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
             "company_name": r["company_name"] or t_clean,
             "action": r["action"],
             "entry_price": round(entry, 2),
+            "stated_entry_price": round(float(r["stated_entry_price"] or entry), 2),
             "target_price": round(target, 2),
             "stoploss_price": round(stoploss, 2),
             "upside_pct": upside,
             "risk_pct": risk_pct,
             "risk_reward": round(r["risk_reward_ratio"] or (abs(upside)/max(1e-2, abs(risk_pct))), 1),
             "ai_conviction_score": ai_conviction,
-            "ai_grade": "A+ (High Conviction)" if ai_conviction >= 60 else ("B (Moderate)" if ai_conviction >= 50 else "C (High Noise)"),
+            "ai_grade": "Tier A (High Historical Calibration)" if ai_conviction >= 60 else ("Tier B (Moderate Profile)" if ai_conviction >= 50 else "Tier C (High Stop-Out Noise)"),
             "status": r["outcome_status"],
             "return_pct": round(r["actual_peak_return_pct"] or 0.0, 1),
             "max_drawdown_pct": round(r["actual_max_drawdown_pct"] or 0.0, 1),
+            "actual_exit_price": r["actual_exit_price"],
+            "labeled_at": r["labeled_at"],
+            "verification_tier": r["verification_tier"] or "ARCHIVED_UNVERIFIED",
+            "proof_hash": r["proof_hash"],
             "index_tier": tier,
             "platform": platform,
             "creator_name": r["creator_name"] or ("Institutional Equity Desk" if platform == "Broker Research" else "Independent Analyst"),
@@ -1130,7 +1192,7 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
             "quote": r["raw_quote"],
             "source_url": src_url,
             "video_id": vid_id,
-            "video_title": r["video_title"] or f"Market Analysis & Stock Setup on {t_clean}",
+            "video_title": r["video_title"] or f"Recorded Market Statement on {t_clean}",
             "thumbnail_url": thumb_url,
             "timestamp_str": ts_str,
             "timestamp_seconds": ts_sec,
@@ -1140,19 +1202,25 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
             "timestamp": r["call_timestamp"]
         })
 
+    tracked_advisors_count = cur.execute("SELECT COUNT(*) FROM influencers").fetchone()[0] or 51
+    verified_primary_count = cur.execute(
+        "SELECT COUNT(*) FROM recommendations WHERE verification_tier = 'VERIFIED_PRIMARY'"
+    ).fetchone()[0] or 0
+
     conn.close()
     result = {
         "stats": {
             "total_calls": total_calls,
             "total_tips_tracked": total_calls,
+            "verified_primary_calls": verified_primary_count,
             "verified_profitable": hits,
             "active_open_tips": opens,
             "overall_accuracy_rate": overall_win_rate,
             "avg_risk_reward": round(stat_row["avg_rr"] or 1.8, 2),
             "avg_drawdown": round(stat_row["avg_drawdown"] or -12.4, 1),
-            "tracked_advisors": 51,
-            "india_vix": 13.8,
-            "vix_regime": "Normal / Stable",
+            "tracked_advisors": int(tracked_advisors_count),
+            "quote_feed_status": "LIVE_EXCHANGE" if LIVE_FEED_IS_REAL else "CACHED_SNAPSHOT",
+            "last_quote_sync": LAST_SYNC_TIMESTAMP,
             "index_universe": "NIFTY 50, 100, 250 & SENSEX"
         },
         "trending_stocks": trending_stocks,
@@ -1203,7 +1271,7 @@ def get_all_stocks_radar(tier: Optional[str] = None):
             "sell_calls": r["sell_count"],
             "bullish_pct": buy_pct,
             "bearish_pct": 100 - buy_pct,
-            "consensus": "Strong Buy" if buy_pct >= 75 else ("Buy" if buy_pct >= 55 else ("Neutral" if buy_pct >= 40 else "Sell")),
+            "consensus": "Strongly Bullish Calls" if buy_pct >= 75 else ("Bullish Call Tilt" if buy_pct >= 55 else ("Mixed Calls" if buy_pct >= 40 else "Bearish Call Tilt")),
             "avg_price": avg_p,
             "avg_target": avg_tgt,
             "avg_stoploss": round(r["avg_stoploss"] or (avg_p * 0.95), 2),
@@ -1216,31 +1284,49 @@ def get_all_stocks_radar(tier: Optional[str] = None):
 @app.get("/api/influencers")
 @app.get("/api/leaderboard")
 def get_leaderboard(platform: Optional[str] = None, sebi_only: bool = False):
+    import math
     conn = get_db()
     cur = conn.cursor()
     cur.execute('''
         SELECT 
             i.id, i.name, i.handle, i.platform, i.is_sebi_registered, i.sebi_reg_no, i.approx_subscribers,
             COUNT(r.id) as total_calls,
+            SUM(CASE WHEN COALESCE(r.verification_tier, 'VERIFIED_PRIMARY') = 'VERIFIED_PRIMARY' THEN 1 ELSE 0 END) as verified_primary_calls,
             SUM(CASE WHEN r.outcome_status = 'HIT' THEN 1 ELSE 0 END) as hits,
             SUM(CASE WHEN r.outcome_status = 'MISS' THEN 1 ELSE 0 END) as misses,
             AVG(r.actual_peak_return_pct) as avg_return,
             AVG(r.actual_max_drawdown_pct) as avg_drawdown
         FROM influencers i
         JOIN recommendations r ON i.id = r.influencer_id
+        WHERE COALESCE(r.verification_tier, 'VERIFIED_PRIMARY') != 'SYNTHETIC_BENCHMARK'
         GROUP BY i.id
         HAVING total_calls >= 2
     ''')
     leaderboard = []
+    z = 1.96  # 95% Wilson Score Confidence Interval
     for r in cur.fetchall():
         if platform and platform != "ALL" and r["platform"] != platform:
             continue
         if sebi_only and not r["is_sebi_registered"]:
             continue
-        decided = (r["hits"] or 0) + (r["misses"] or 0)
-        wr = round(((r["hits"] or 0) / max(1, decided)) * 100, 1)
-        # Empirical Bayes shrinkage (prior = 45% over m = 6 pseudo-calls) prevents 2-call flukes from topping leaderboard
-        bayes_wr = round((((r["hits"] or 0) + 6.0 * 0.45) / (decided + 6.0)) * 100, 1)
+        hits_n = int(r["hits"] or 0)
+        misses_n = int(r["misses"] or 0)
+        decided = hits_n + misses_n
+        p_hat = (hits_n / decided) if decided > 0 else 0.0
+        wr = round(p_hat * 100.0, 1)
+
+        # Wilson 95% Confidence Interval (defamation-proof uncertainty disclosure)
+        if decided > 0:
+            denom = 1.0 + (z * z) / decided
+            center = (p_hat + (z * z) / (2.0 * decided)) / denom
+            margin = (z * math.sqrt((p_hat * (1.0 - p_hat) + (z * z) / (4.0 * decided)) / decided)) / denom
+            wilson_low = round(max(0.0, (center - margin) * 100.0), 1)
+            wilson_high = round(min(100.0, (center + margin) * 100.0), 1)
+        else:
+            wilson_low, wilson_high = 0.0, 100.0
+
+        # Empirical Bayes shrinkage (prior = 45% over m = 6 pseudo-calls) prevents 2-call flukes from topping ledger
+        bayes_wr = round(((hits_n + 6.0 * 0.45) / (decided + 6.0)) * 100.0, 1)
         drawdown_penalty = min(15.0, abs(r["avg_drawdown"] or 0.0) * 0.1)
         volume_bonus = min(10.0, np.log10(max(1, r["total_calls"])) * 5.0)
         trust_score = round((bayes_wr * 0.55) + (22.0 if r["is_sebi_registered"] else 4.0) + (15.0 - drawdown_penalty) + volume_bonus, 1)
@@ -1254,10 +1340,13 @@ def get_leaderboard(platform: Optional[str] = None, sebi_only: bool = False):
             "sebi_no": r["sebi_reg_no"],
             "subscribers": r["approx_subscribers"],
             "total_calls": r["total_calls"],
-            "hits": r["hits"],
-            "misses": r["misses"],
+            "verified_primary_calls": int(r["verified_primary_calls"] or 0),
+            "hits": hits_n,
+            "misses": misses_n,
             "win_rate": wr,
             "bayes_win_rate": bayes_wr,
+            "wilson_low": wilson_low,
+            "wilson_high": wilson_high,
             "avg_profit": round(r["avg_return"] or 0.0, 1),
             "max_drawdown": round(r["avg_drawdown"] or 0.0, 1),
             "trust_score": max(5.0, min(99.0, trust_score)),
@@ -1265,7 +1354,15 @@ def get_leaderboard(platform: Optional[str] = None, sebi_only: bool = False):
         })
     leaderboard.sort(key=lambda x: (x["bayes_win_rate"], x["total_calls"]), reverse=True)
     conn.close()
-    return {"leaderboard": leaderboard}
+    return {
+        "leaderboard": leaderboard,
+        "methodology": {
+            "ranking_formula": "Empirical Bayes Shrinkage: (hits + 6 * 0.45) / (hits + misses + 6)",
+            "confidence_interval": "95% Wilson Score Interval (z = 1.96)",
+            "synthetic_excluded": True,
+            "disclaimer": "Empirical historical hit-rates strictly exclude synthetic benchmarks and reflect only resolved target/stop-loss outcomes. Not an endorsement or defamation of any individual or entity.",
+        },
+    }
 
 @app.get("/api/dataset")
 def get_dataset(
@@ -1280,8 +1377,10 @@ def get_dataset(
     
     query = '''
         SELECT 
-            r.id, r.ticker, r.company_name, r.action, r.entry_price, r.target_price, r.stoploss_price,
-            r.risk_reward_ratio, r.outcome_status, r.call_timestamp, r.platform, r.raw_quote, r.source_url,
+            r.id, r.ticker, r.company_name, r.action, r.entry_price, r.stated_entry_price,
+            r.target_price, r.stoploss_price, r.risk_reward_ratio, r.outcome_status,
+            r.actual_exit_price, r.labeled_at, r.verification_tier, r.proof_hash,
+            r.call_timestamp, r.platform, r.raw_quote, r.source_url,
             i.name as creator_name, i.is_sebi_registered, i.approx_subscribers
         FROM recommendations r
         LEFT JOIN influencers i ON r.influencer_id = i.id
@@ -1328,12 +1427,17 @@ def get_dataset(
             "is_sebi": bool(r["is_sebi_registered"]),
             "action": r["action"],
             "entry_price": round(entry, 2),
+            "stated_entry_price": round(float(r["stated_entry_price"] or entry), 2),
             "target_price": round(target, 2),
             "stoploss_price": round(stoploss, 2),
             "upside_pct": upside,
             "risk_pct": risk,
             "risk_reward_ratio": round(r["risk_reward_ratio"] or (upside / max(1e-2, risk)), 2),
             "outcome_status": r["outcome_status"],
+            "actual_exit_price": r["actual_exit_price"],
+            "labeled_at": r["labeled_at"],
+            "verification_tier": r["verification_tier"] or "ARCHIVED_UNVERIFIED",
+            "proof_hash": r["proof_hash"],
             "timestamp": r["call_timestamp"],
             "quote": r["raw_quote"],
             "source_url": r["source_url"]
@@ -1588,9 +1692,9 @@ def audit_live_text_fastpath(req: AuditTextRequest):
         "stated_risk_pct": downside,
         "stated_rr_ratio": rr,
         "ai_conviction_score": conviction,
-        "ai_recommendation": "APPROVED (High Probability Setup)" if conviction >= 60 else "CAUTION (High Stopout Probability)",
-        "verdict_title": f"Audited Setup on {ticker} ({action})",
-        "verdict_summary": f"Target: ₹{target} (+{upside}%), Stop Loss: ₹{stoploss} (-{downside}%). Model Conviction Score: {conviction}% (Historical Win Rate: {'75%' if conviction >= 60 else '38%'})."
+        "ai_recommendation": "HIGH HISTORICAL CALIBRATION PROFILE (ANALYTICAL ONLY)" if conviction >= 60 else "ELEVATED STOP-OUT RISK PROFILE (ANALYTICAL ONLY)",
+        "verdict_title": f"Empirical Geometry Audit on {ticker} ({action})",
+        "verdict_summary": f"Parsed Target: ₹{target} (+{upside}%), Stop Loss: ₹{stoploss} (-{downside}%), R:R 1:{rr}. Bayesian Calibration Score: {conviction}%. Historical simulation only — not SEBI-registered investment advice."
     }
 
 @app.get("/api/alerts")
@@ -1658,9 +1762,14 @@ def export_sebi_compliance_audit(format: str = Query("json", pattern="^(json|csv
             r.ticker as nse_ticker,
             r.action as trade_action,
             r.entry_price,
+            r.stated_entry_price,
             r.target_price,
             r.stoploss_price,
             r.outcome_status as verified_outcome,
+            r.actual_exit_price,
+            r.labeled_at,
+            r.verification_tier,
+            r.proof_hash,
             r.raw_quote as exact_statement,
             r.source_url
         FROM recommendations r
@@ -2000,7 +2109,7 @@ async def get_finbot_status():
             "status": "healthy",
             "service": "Native FinBot AI Quantitative Core with Persistent Customer Memory",
             "knowledge_vectors": 544,
-            "models": ["gemini-3.5-flash", "gemini-3.5-flash-lite", "faiss-vector-rag"]
+            "models": ["gemini-2.5-flash", "gemini-2.5-flash-lite", "faiss-vector-rag"]
         }
     }
 
@@ -2159,17 +2268,7 @@ async def handle_drag_and_drop_audit(
 
     return council_result
 
-@app.on_event("startup")
-async def start_background_workers():
-    """Starts background ingestion loop, warms FAISS vector index, and verifies Redis connection."""
-    import asyncio
-    import threading
-    from src.quant.background_scheduler import run_continuous_ingestion_loop
-    from src.quant.rag_service import _initialize_index
-
-    threading.Thread(target=_initialize_index, daemon=True).start()
-    asyncio.create_task(run_continuous_ingestion_loop(interval_seconds=3600))
-    print("🚀 Background Multi-Agent Ingestion Scheduler & FAISS Index Warmup initialized.")
+# Startup lifecycle is managed cleanly via FastAPI `lifespan` above.
 
 # -------------------------------------------------------------------------
 # Static Frontend Serving for Single-Container Docker / Cloud Deployment
