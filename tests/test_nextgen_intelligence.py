@@ -216,9 +216,15 @@ def test_vocal_stress_real_librosa_audio_upload_and_sample():
     assert udata["linguistic_forensics"]["hedging_hits_count"] >= 2
     assert 0 <= udata["composite_stress_score"] <= 100
 
-    # 3. Verify persistence in stress history endpoint
+    # 3. Verify persistence in stress history endpoint, then clean up synthetic test row
     h_resp = client.get("/api/audio/stress-history?limit=10")
     assert h_resp.status_code == 200
     hdata = h_resp.json()
     assert hdata["count"] >= 2
     assert any(row["ticker"] == "TCS" for row in hdata["history"])
+
+    import sqlite3, os
+    conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "marketprobe.db"))
+    conn.execute("DELETE FROM earnings_stress_audits WHERE call_title = 'TCS Earnings Call Vocal Forensics'")
+    conn.commit()
+    conn.close()

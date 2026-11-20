@@ -61,17 +61,39 @@ def compute_proof_hash(
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:24]
 
 
-def classify_verification_tier(platform: Optional[str], source_url: Optional[str], video_id: Optional[str]) -> str:
+SYNTHETIC_QUOTE_MARKERS = (
+    "jackpot call",
+    "huge buying seen!",
+)
+
+SYNTHETIC_TELEGRAM_HANDLES = (
+    "t.me/sureshot_intraday_king/",
+    "t.me/alpha_momentum_traders/",
+    "t.me/nifty_hunters_vip/",
+    "t.me/bharat_equity_signals/",
+    "t.me/jackpot_multibagger_gems/",
+)
+
+
+def classify_verification_tier(
+    platform: Optional[str],
+    source_url: Optional[str],
+    video_id: Optional[str],
+    raw_quote: Optional[str] = None,
+) -> str:
     """
     Honest provenance classification so synthetic/template rows never pollute
     primary-source creator accountability scores.
     """
     plat = (platform or "").strip()
     url = (source_url or "").strip().lower()
+    quote_l = (raw_quote or "").strip().lower()
 
-    if plat in ("Automated EOD Ingestion", "INSTITUTIONAL_RESEARCH", "TEST_UPLOAD") or url in (
-        "nse official stream",
-        "https://research.brokerage.com",
+    if (
+        plat in ("Automated EOD Ingestion", "INSTITUTIONAL_RESEARCH", "TEST_UPLOAD")
+        or url in ("nse official stream", "https://research.brokerage.com")
+        or any(m in quote_l for m in SYNTHETIC_QUOTE_MARKERS)
+        or any(h in url for h in SYNTHETIC_TELEGRAM_HANDLES)
     ):
         return "SYNTHETIC_BENCHMARK"
 
@@ -120,7 +142,7 @@ def run_hygiene_audit(db_path: Optional[str] = None) -> Dict[str, Any]:
 
     rows = cur.execute(
         """
-        SELECT id, platform, source_url, video_id, ticker, action,
+        SELECT id, platform, source_url, video_id, raw_quote, ticker, action,
                entry_price, target_price, stoploss_price, risk_reward_ratio,
                call_timestamp, actual_peak_return_pct, actual_max_drawdown_pct,
                verification_tier, stated_entry_price, proof_hash
@@ -140,7 +162,7 @@ def run_hygiene_audit(db_path: Optional[str] = None) -> Dict[str, Any]:
         peak = float(r["actual_peak_return_pct"] or 0.0)
         dd = float(r["actual_max_drawdown_pct"] or 0.0)
 
-        tier = classify_verification_tier(r["platform"], r["source_url"], r["video_id"])
+        tier = classify_verification_tier(r["platform"], r["source_url"], r["video_id"], r["raw_quote"])
         stated_entry = r["stated_entry_price"] if r["stated_entry_price"] is not None else entry
         p_hash = r["proof_hash"] or compute_proof_hash(
             r["ticker"], r["action"], stated_entry, target, sl, r["call_timestamp"], r["source_url"]

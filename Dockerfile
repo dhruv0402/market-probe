@@ -12,20 +12,23 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: Production Python API & Inference Engine
+# Stage 2: Production Python API & Quantitative Intelligence Engine
 FROM python:3.11-slim AS production
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    ENV=production \
     PORT=8080 \
     MARKETPROBE_DB_PATH=/app/data/marketprobe.db \
     MARKETPROBE_MODEL_PATH=/app/data/xgb_model.pkl
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (including ffmpeg & libsndfile1 for Vocal Stress Lab)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    ffmpeg \
+    libsndfile1 \
     gcc \
     g++ \
     && rm -rf /var/lib/apt/lists/*
@@ -34,18 +37,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend, data, and scripts
+# Copy backend application, data assets, and docs
 COPY src/ ./src/
 COPY data/ ./data/
 COPY docs/ ./docs/
-COPY *.py ./
 
-# Copy built frontend into dist
+# Copy built frontend SPA into dist
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD curl -f http://localhost:8080/api/health || exit 1
 
 CMD ["python", "-m", "uvicorn", "src.backend.api:app", "--host", "0.0.0.0", "--port", "8080"]

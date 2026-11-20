@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   marketprobe-api:
     build:
@@ -9,9 +7,16 @@ services:
     restart: always
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
+      - ENV=${ENV:-production}
       - PORT=8080
-      - MARKETPROBE_SECRET_KEY=prod_super_secret_marketprobe_jwt_key_9938210
+      - MARKETPROBE_SECRET_KEY=${MARKETPROBE_SECRET_KEY:?Set MARKETPROBE_SECRET_KEY in .env}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8080}
+      - MARKETPROBE_ALLOW_DEMO_TOKEN=${MARKETPROBE_ALLOW_DEMO_TOKEN:-false}
+      - MARKETPROBE_DEMO_MODE=${MARKETPROBE_DEMO_MODE:-false}
       - MARKETPROBE_DB_PATH=/app/data/marketprobe.db
       - MARKETPROBE_MODEL_PATH=/app/data/xgb_model.pkl
     volumes:

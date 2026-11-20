@@ -7,22 +7,35 @@ services:
     region: singapore
     branch: main
     autoDeploy: true
+    healthCheckPath: /api/health
     envVars:
+      - key: ENV
+        value: production
       - key: PORT
         value: 8080
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: MARKETPROBE_SECRET_KEY
+        generateValue: true
+      - key: MARKETPROBE_ALLOW_DEMO_TOKEN
+        value: "false"
+      - key: MARKETPROBE_DEMO_MODE
+        value: "false"
+      - key: CORS_ORIGINS
+        value: "https://marketprobe.onrender.com"
+      - key: MARKETPROBE_DB_PATH
+        value: /app/data/marketprobe.db
+      - key: MARKETPROBE_MODEL_PATH
+        value: /app/data/xgb_model.pkl
+      - key: DATABASE_URL
+        fromDatabase:
+          name: marketprobe-db
+          property: connectionString
       - key: REDIS_URL
         fromService:
           type: redis
           name: marketprobe-redis
           property: connectionString
-      - key: MARKETPROBE_SECRET_KEY
-        generateValue: true
-      - key: MARKETPROBE_DB_PATH
-        value: /app/data/marketprobe.db
-      - key: MARKETPROBE_MODEL_PATH
-        value: /app/data/xgb_model.pkl
-      - key: CORS_ORIGINS
-        value: "*"
 
   - type: redis
     name: marketprobe-redis
@@ -30,3 +43,10 @@ services:
     region: singapore
     maxmemoryPolicy: allkeys-lru
     ipAllowList: []
+
+databases:
+  - name: marketprobe-db
+    plan: free
+    region: singapore
+    databaseName: marketprobe
+    user: marketprobe_app
