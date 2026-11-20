@@ -23,24 +23,24 @@ DB_PATH = os.path.join(PROJECT_ROOT, "data", "marketprobe.db")
 
 # Baseline NSE spot & volatility priors (drift, sigma, base_price)
 _NSE_REFERENCE_PARAMS: Dict[str, Tuple[float, float, float]] = {
-    "NIFTY": (0.14, 0.16, 24842.6),
-    "^NSEI": (0.14, 0.16, 24842.6),
+    "NIFTY": (0.14, 0.16, 25800.0),
+    "^NSEI": (0.14, 0.16, 25800.0),
     "BANKNIFTY": (0.15, 0.21, 52190.15),
-    "RELIANCE": (0.15, 0.24, 2984.1),
-    "HDFCBANK": (0.12, 0.21, 1750.0),
-    "INFY": (0.14, 0.26, 1840.0),
-    "ICICIBANK": (0.16, 0.22, 1345.0),
-    "TCS": (0.12, 0.20, 4120.0),
-    "SBIN": (0.16, 0.27, 845.0),
-    "BHARTIARTL": (0.18, 0.23, 1620.0),
-    "ITC": (0.11, 0.18, 480.0),
-    "LT": (0.16, 0.24, 3650.0),
-    "BAJFINANCE": (0.15, 0.29, 7120.0),
-    "TATAMOTORS": (0.17, 0.31, 940.0),
-    "ZOMATO": (0.20, 0.38, 255.0),
-    "TATASTEEL": (0.14, 0.32, 152.0),
-    "HAL": (0.21, 0.34, 4350.0),
-    "BEL": (0.19, 0.33, 295.0),
+    "RELIANCE": (0.15, 0.22, 1378.0),
+    "HDFCBANK": (0.13, 0.20, 846.0),
+    "INFY": (0.15, 0.24, 1098.0),
+    "ICICIBANK": (0.16, 0.21, 1640.0),
+    "TCS": (0.13, 0.19, 2376.0),
+    "SBIN": (0.16, 0.25, 1165.0),
+    "BHARTIARTL": (0.18, 0.22, 2162.0),
+    "ITC": (0.12, 0.17, 299.0),
+    "LT": (0.16, 0.23, 4209.0),
+    "BAJFINANCE": (0.15, 0.27, 1122.0),
+    "TATAMOTORS": (0.17, 0.29, 312.0),
+    "ZOMATO": (0.20, 0.36, 255.0),
+    "TATASTEEL": (0.14, 0.30, 152.0),
+    "HAL": (0.21, 0.32, 4320.0),
+    "BEL": (0.19, 0.31, 298.0),
 }
 
 
@@ -129,12 +129,17 @@ def simulate_monte_carlo_first_passage(
     """
     dt = 1.0 / 252.0
     steps = max(5, int(horizon_days * (252.0 / 365.0)))
-    
+
+    # Deterministic RNG seeded on market parameters (independent of barrier choice so
+    # counterfactual barrier comparisons use the exact same underlying price realizations!)
+    seed_val = abs(hash((round(entry_price, 1), round(mu, 3), round(sigma, 3), int(horizon_days)))) % (2**31 - 1)
+    rng = np.random.default_rng(seed_val)
+
     # Pre-generate standard normal innovations
-    Z = np.random.normal(0.0, 1.0, (n_paths, steps))
+    Z = rng.normal(0.0, 1.0, (n_paths, steps))
     # Poisson jumps
-    jumps = np.random.poisson(jump_intensity * dt, (n_paths, steps))
-    jump_sizes = np.random.normal(jump_mean, jump_std, (n_paths, steps))
+    jumps = rng.poisson(jump_intensity * dt, (n_paths, steps))
+    jump_sizes = rng.normal(jump_mean, jump_std, (n_paths, steps))
     
     # Initialize price matrix
     price_paths = np.zeros((n_paths, steps + 1))
@@ -252,11 +257,16 @@ def optimize_counterfactual_barriers(
     steps = max(5, int(horizon_days * (252.0 / 365.0)))
     sigma_h = sigma * np.sqrt(max(horizon_days, 5) / 252.0)
 
+    # Deterministic RNG seeded on market parameters (matches simulate_monte_carlo_first_passage
+    # so applying counterfactual barriers yields identical first-passage odds & EV!)
+    seed_val = abs(hash((round(entry_price, 1), round(mu, 3), round(sigma, 3), int(horizon_days)))) % (2**31 - 1)
+    rng = np.random.default_rng(seed_val)
+
     # Generate 1,000 jump-diffusion trajectories
     n_paths = 1000
-    Z = np.random.normal(0.0, 1.0, (n_paths, steps))
-    jumps = np.random.poisson(0.08 * dt, (n_paths, steps))
-    jump_sizes = np.random.normal(-0.02, 0.04, (n_paths, steps))
+    Z = rng.normal(0.0, 1.0, (n_paths, steps))
+    jumps = rng.poisson(0.08 * dt, (n_paths, steps))
+    jump_sizes = rng.normal(-0.02, 0.04, (n_paths, steps))
 
     price_paths = np.zeros((n_paths, steps + 1))
     price_paths[:, 0] = entry_price
@@ -308,42 +318,48 @@ def optimize_counterfactual_barriers(
             "expected_return_pct": round(ev_pct, 2),
         }
 
-    # Candidate target and stoploss percentages anchored to sigma_h
-    tgt_pcts = sorted(set([round(max(0.030, min(0.085, m * sigma_h)), 4) for m in (0.50, 0.70, 0.90, 1.15)]))
-    sl_pcts = sorted(set([round(max(0.025, min(0.060, m * sigma_h)), 4) for m in (0.45, 0.60, 0.75, 0.95)]))
+    # Candidate target and stoploss percentages anchored to sigma_h (including realistic 30D swing targets)
+    tgt_pcts = sorted(set([round(max(0.025, min(0.110, m * sigma_h)), 4) for m in (0.35, 0.50, 0.70, 0.90, 1.15)]))
+    sl_pcts = sorted(set([round(max(0.020, min(0.080, m * sigma_h)), 4) for m in (0.35, 0.50, 0.70, 0.90, 1.10)]))
 
     best_cand = None
     best_utility = -1e9
     for tp in tgt_pcts:
         for sp in sl_pcts:
+            # Enforce disciplined risk-reward floor (reward >= 0.95x risk)
+            if tp < sp * 0.95:
+                continue
             cand_tgt = entry_price * (1.0 + tp) if is_buy else entry_price * (1.0 - tp)
             cand_sl = entry_price * (1.0 - sp) if is_buy else entry_price * (1.0 + sp)
             res = eval_barrier(cand_tgt, cand_sl)
-            # Utility rewards positive mathematical EV, high first-passage target hit probability, and R:R discipline
-            rr_bonus = 8.0 if tp >= sp else -4.0
-            ev_bonus = res["expected_return_pct"] * 12.0 + (10.0 if res["expected_return_pct"] > 0.5 else 0.0)
-            utility = (res["p_target_first"] * 85.0) + ev_bonus + rr_bonus - (res["p_stoploss_first"] * 35.0)
+            # Estimate Indian post-tax EV (20% STCG + 0.15% round-trip STT/slippage drag)
+            gross_ev = res["expected_return_pct"]
+            post_tax_est = (gross_ev * 0.80 - 0.15) if gross_ev > 0 else (gross_ev - 0.15)
+            rr_bonus = min(14.0, (tp / max(0.01, sp)) * 5.0)
+            ev_bonus = post_tax_est * 24.0 + (16.0 if post_tax_est > 0.25 else 0.0)
+            pass_bonus = 18.0 if (res["p_target_first"] >= 0.38 and gross_ev > 0) else 0.0
+            utility = (res["p_target_first"] * 95.0) + ev_bonus + rr_bonus + pass_bonus - (res["p_stoploss_first"] * 40.0)
             if utility > best_utility:
                 best_utility = utility
                 best_cand = res
 
     if best_cand is None:
-        fallback_tgt = original_target or (entry_price * 1.05)
+        fallback_tgt = original_target or (entry_price * 1.06)
         fallback_sl = original_stoploss or (entry_price * 0.95)
         best_cand = eval_barrier(fallback_tgt, fallback_sl)
 
-    # Conviction score for restructured trade
+    # Conviction score for restructured trade (MUST mirror evaluate_quant_math_agent gating exactly!)
     best_p_hit = best_cand["p_target_first"]
     best_ev_pct = best_cand["expected_return_pct"]
-    if best_ev_pct > 1.5 and best_p_hit >= 0.50:
-        best_cand["conviction_score"] = min(92, int(52 + best_p_hit * 48))
+    if best_ev_pct > 1.2 and best_p_hit >= 0.48:
+        best_cand["conviction_score"] = min(95, int(52 + best_p_hit * 48))
         best_cand["vote"] = "BULLISH"
-    elif best_ev_pct >= 0.0 and best_p_hit >= 0.40:
-        best_cand["conviction_score"] = max(55, int(42 + best_p_hit * 35))
+    elif best_ev_pct > 0 and best_p_hit >= 0.38:
+        best_cand["conviction_score"] = 58
         best_cand["vote"] = "NEUTRAL"
     else:
-        best_cand["conviction_score"] = max(35, int(best_p_hit * 65))
-        best_cand["vote"] = "DEFENSIVE"
+        best_cand["conviction_score"] = max(12, int(best_p_hit * 60))
+        best_cand["vote"] = "BEARISH_VETO"
 
     orig_ev = float(original_mc.get("expected_return_pct", 0.0)) if original_mc else 0.0
     orig_p = float(original_mc.get("p_target_first", 0.0)) if original_mc else 0.0
@@ -357,8 +373,13 @@ def optimize_counterfactual_barriers(
         "expected_return_pct": orig_ev,
     }
 
+    tgt_diff_pct = abs(best_cand["target"] - original_target) / max(1.0, original_target) * 100.0 if original_target else 100.0
+    sl_diff_pct = abs(best_cand["stoploss"] - original_stoploss) / max(1.0, original_stoploss) * 100.0 if original_stoploss else 100.0
+    levels_meaningfully_different = (tgt_diff_pct >= 0.6) or (sl_diff_pct >= 0.6)
+    actually_improves = (best_p_hit - orig_p >= 0.03) or (best_ev_pct - orig_ev >= 0.15)
+
     return {
-        "was_restructured": orig_p < 0.50 or orig_ev <= 1.5,
+        "was_restructured": bool(levels_meaningfully_different and actually_improves),
         "original_metrics": original_metrics,
         "restructured_metrics": best_cand,
         "improvement_hit_prob_pct": round((best_p_hit - orig_p) * 100.0, 1),
@@ -421,18 +442,21 @@ def evaluate_quant_math_agent(
     p_sl = mc_results["p_stoploss_first"]
     ev_pct = mc_results["expected_return_pct"]
     
-    if ev_pct > 2.0 and p_hit >= 0.50:
+    if ev_pct > 1.2 and p_hit >= 0.48:
         vote = "BULLISH"
-        conviction = min(95, int(50 + (p_hit * 50)))
-        verdict = f"Positive mathematical drift: {p_hit*100:.1f}% first-passage target probability vs {p_sl*100:.1f}% SL risk."
-    elif ev_pct > 0 and p_hit >= 0.40:
+        conviction = min(95, int(52 + (p_hit * 48)))
+        verdict = f"Positive mathematical drift (+{ev_pct:.2f}%): {p_hit*100:.1f}% first-passage target probability vs {p_sl*100:.1f}% SL risk."
+    elif ev_pct > 0 and p_hit >= 0.38:
         vote = "NEUTRAL"
-        conviction = 55
-        verdict = f"Marginal expected value (+{ev_pct:.2f}%). Execution risk present under volatility."
+        conviction = 58
+        verdict = f"Positive marginal expected value (+{ev_pct:.2f}%) with {p_hit*100:.1f}% target odds vs {p_sl*100:.1f}% SL risk."
     else:
         vote = "BEARISH_VETO"
-        conviction = max(10, int(p_hit * 60))
-        verdict = f"Negative expected alpha ({ev_pct:.2f}%). Odds of hitting stop-loss ({p_sl*100:.1f}%) mathematically outweigh target."
+        conviction = max(12, int(p_hit * 60))
+        if ev_pct <= 0:
+            verdict = f"Negative expected alpha ({ev_pct:.2f}%). Stop-loss hit odds ({p_sl*100:.1f}%) mathematically outweigh target ({p_hit*100:.1f}%)."
+        else:
+            verdict = f"Low first-passage target odds ({p_hit*100:.1f}% vs {p_sl*100:.1f}% SL risk) despite +{ev_pct:.2f}% terminal drift; unfavorable stop-out geometry."
 
     return {
         "agent": "Quantitative Mathematics Agent",

@@ -1000,7 +1000,7 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
             SUM(CASE WHEN outcome_status='OPEN' THEN 1 ELSE 0 END) as opens,
             AVG(actual_peak_return_pct) as avg_return,
             AVG(actual_max_drawdown_pct) as avg_drawdown,
-            AVG(risk_reward_ratio) as avg_rr
+            AVG(CASE WHEN risk_reward_ratio BETWEEN 0.1 AND 10 THEN risk_reward_ratio END) as avg_rr
         FROM recommendations
     ''')
     stat_row = cur.fetchone()
@@ -1051,7 +1051,7 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
             "recent_accuracy": round((r["hits"] / max(1, r["hits"] + r["misses"])) * 100, 1)
         })
 
-    # Recent Live Tips with AI Conviction Scoring
+    # Recent Live Tips with AI Conviction Scoring (exclude raw index tickers from stock feed)
     cur.execute('''
         SELECT 
             r.id, r.influencer_id, r.ticker, r.company_name, r.action, r.entry_price, r.target_price, r.stoploss_price,
@@ -1061,6 +1061,7 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
             i.name as creator_name, i.handle as creator_handle, i.is_sebi_registered, i.sebi_reg_no, i.approx_subscribers
         FROM recommendations r
         LEFT JOIN influencers i ON r.influencer_id = i.id
+        WHERE r.ticker IS NOT NULL AND r.ticker NOT LIKE '^%' AND r.entry_price >= 15
         ORDER BY r.id DESC
         LIMIT 100
     ''')
@@ -1142,11 +1143,12 @@ def get_home_feed(min_conviction: float = Query(0.0, description="Filter by mini
     conn.close()
     result = {
         "stats": {
+            "total_calls": total_calls,
             "total_tips_tracked": total_calls,
             "verified_profitable": hits,
             "active_open_tips": opens,
             "overall_accuracy_rate": overall_win_rate,
-            "avg_risk_reward": round(stat_row["avg_rr"] or 1.8, 1),
+            "avg_risk_reward": round(stat_row["avg_rr"] or 1.8, 2),
             "avg_drawdown": round(stat_row["avg_drawdown"] or -12.4, 1),
             "tracked_advisors": 51,
             "india_vix": 13.8,
@@ -1177,7 +1179,7 @@ def get_all_stocks_radar(tier: Optional[str] = None):
             SUM(CASE WHEN outcome_status = 'HIT' THEN 1 ELSE 0 END) as hits,
             SUM(CASE WHEN outcome_status = 'MISS' THEN 1 ELSE 0 END) as misses
         FROM recommendations
-        WHERE ticker IS NOT NULL AND ticker != ''
+        WHERE ticker IS NOT NULL AND ticker != '' AND ticker NOT LIKE '^%' AND entry_price >= 15
         GROUP BY ticker
         ORDER BY total_mentions DESC
     ''')
@@ -1228,7 +1230,6 @@ def get_leaderboard(platform: Optional[str] = None, sebi_only: bool = False):
         JOIN recommendations r ON i.id = r.influencer_id
         GROUP BY i.id
         HAVING total_calls >= 2
-        ORDER BY (CAST(SUM(CASE WHEN r.outcome_status = 'HIT' THEN 1 ELSE 0 END) AS FLOAT) / max(1, COUNT(r.id))) DESC, total_calls DESC
     ''')
     leaderboard = []
     for r in cur.fetchall():
@@ -1236,10 +1237,13 @@ def get_leaderboard(platform: Optional[str] = None, sebi_only: bool = False):
             continue
         if sebi_only and not r["is_sebi_registered"]:
             continue
-        decided = r["hits"] + r["misses"]
-        wr = round((r["hits"] / max(1, decided)) * 100, 1)
+        decided = (r["hits"] or 0) + (r["misses"] or 0)
+        wr = round(((r["hits"] or 0) / max(1, decided)) * 100, 1)
+        # Empirical Bayes shrinkage (prior = 45% over m = 6 pseudo-calls) prevents 2-call flukes from topping leaderboard
+        bayes_wr = round((((r["hits"] or 0) + 6.0 * 0.45) / (decided + 6.0)) * 100, 1)
         drawdown_penalty = min(15.0, abs(r["avg_drawdown"] or 0.0) * 0.1)
-        trust_score = round((wr * 0.50) + (25.0 if r["is_sebi_registered"] else 5.0) + (15.0 - drawdown_penalty) + 10.0, 1)
+        volume_bonus = min(10.0, np.log10(max(1, r["total_calls"])) * 5.0)
+        trust_score = round((bayes_wr * 0.55) + (22.0 if r["is_sebi_registered"] else 4.0) + (15.0 - drawdown_penalty) + volume_bonus, 1)
         
         leaderboard.append({
             "id": r["id"],
@@ -1253,11 +1257,13 @@ def get_leaderboard(platform: Optional[str] = None, sebi_only: bool = False):
             "hits": r["hits"],
             "misses": r["misses"],
             "win_rate": wr,
+            "bayes_win_rate": bayes_wr,
             "avg_profit": round(r["avg_return"] or 0.0, 1),
             "max_drawdown": round(r["avg_drawdown"] or 0.0, 1),
             "trust_score": max(5.0, min(99.0, trust_score)),
-            "grade": "A" if wr >= 65 else ("B" if wr >= 45 else "C")
+            "grade": "A" if bayes_wr >= 60 else ("B" if bayes_wr >= 47 else "C")
         })
+    leaderboard.sort(key=lambda x: (x["bayes_win_rate"], x["total_calls"]), reverse=True)
     conn.close()
     return {"leaderboard": leaderboard}
 
@@ -1410,6 +1416,9 @@ def get_portfolio_simulation(
     returns[sell_mask & miss_mask] = (entries[sell_mask & miss_mask] - stoplosses[sell_mask & miss_mask]) / entries[sell_mask & miss_mask]
     returns[sell_mask & ~hit_mask & ~miss_mask] = -0.010
 
+    # Guard against corrupted extreme single-trade outliers
+    returns = np.clip(returns, -0.35, 0.55)
+
     # Sequential compounding with position sizing
     cap_curve = np.zeros(n + 1)
     cap_curve[0] = initial_capital
@@ -1441,18 +1450,30 @@ def get_portfolio_simulation(
     net_pnl = round(final_cap - initial_capital, 2)
     net_pnl_pct = round(((final_cap - initial_capital) / initial_capital) * 100, 2)
 
-    # Benchmark drift
-    bench_curve = initial_capital * (1.0025 ** np.arange(n + 1))
+    # Realistic NIFTY 50 benchmark drift (~14% annualized scaled across sample)
+    bench_step = min(0.0008, 0.18 / max(30, n))
+    bench_curve = initial_capital * ((1.0 + bench_step) ** np.arange(n + 1))
+    bench_return_pct = round(((bench_curve[-1] - initial_capital) / initial_capital) * 100, 2)
+    alpha_pct = round(net_pnl_pct - bench_return_pct, 2)
 
+    # Downsample evenly across the ENTIRE curve so start & final_capital match the KPI cards exactly
+    sample_indices = np.unique(np.linspace(0, len(cap_curve) - 1, min(len(cap_curve), 80), dtype=int))
     equity_curve = [
         {
-            "step": i,
-            "portfolio_value": round(float(cap_curve[i]), 2),
-            "benchmark_value": round(float(bench_curve[i]), 2),
-            "net_pnl": round(float(cap_curve[i] - initial_capital), 2)
+            "step": int(idx),
+            "portfolio_value": round(float(cap_curve[idx]), 2),
+            "benchmark_value": round(float(bench_curve[idx]), 2),
+            "net_pnl": round(float(cap_curve[idx] - initial_capital), 2)
         }
-        for i in range(min(len(cap_curve), 60))
+        for idx in sample_indices
     ]
+
+    if profit_factor >= 1.30 and alpha_pct >= 0:
+        verdict_label = "POSITIVE ALPHA & COMPOUNDING EDGE"
+    elif profit_factor >= 1.05 and net_pnl_pct > 0:
+        verdict_label = "POSITIVE RETURN — TRAILS BENCHMARK OR HIGH VOLATILITY"
+    else:
+        verdict_label = "NEGATIVE EXPECTED VALUE (HIGH RISK)"
 
     return {
         "summary": {
@@ -1460,15 +1481,15 @@ def get_portfolio_simulation(
             "final_capital": round(final_cap, 2),
             "net_pnl_inr": net_pnl,
             "net_pnl_pct": net_pnl_pct,
-            "benchmark_return_pct": round(((bench_curve[-1] - initial_capital) / initial_capital) * 100, 2),
-            "alpha_pct": round(net_pnl_pct - ((bench_curve[-1] - initial_capital) / initial_capital) * 100, 2),
+            "benchmark_return_pct": bench_return_pct,
+            "alpha_pct": alpha_pct,
             "total_trades": total_tr,
             "wins": wins,
             "losses": losses,
             "win_rate": win_rate,
             "profit_factor": profit_factor,
             "max_drawdown_pct": round(max_dd, 2),
-            "risk_verdict": "HIGH QUALITY ALIGNMENT" if win_rate >= 60 else "NEGATIVE EXPECTED VALUE (HIGH RISK)",
+            "risk_verdict": verdict_label,
             "source_selected": source
         },
         "equity_curve": equity_curve,
@@ -1584,6 +1605,7 @@ def get_high_conviction_alerts(min_conviction: float = Query(60.0, description="
             i.name as creator_name, i.platform, i.is_sebi_registered as is_sebi, i.sebi_reg_no
         FROM recommendations r
         JOIN influencers i ON r.influencer_id = i.id
+        WHERE r.entry_price >= 15 AND r.target_price >= 15 AND r.ticker NOT LIKE '^%'
         ORDER BY r.call_timestamp DESC
         LIMIT 100
     ''')
@@ -1805,7 +1827,9 @@ def get_market_open_radar():
             i.name as creator_name, i.is_sebi_registered, i.sebi_reg_no
         FROM recommendations r
         LEFT JOIN influencers i ON r.influencer_id = i.id
-        WHERE r.outcome_status = 'OPEN' OR r.outcome_status IS NULL
+        WHERE (r.outcome_status = 'OPEN' OR r.outcome_status IS NULL)
+          AND r.ticker NOT LIKE '^%'
+          AND r.entry_price >= 15
         ORDER BY r.id DESC
         LIMIT 60
     ''')

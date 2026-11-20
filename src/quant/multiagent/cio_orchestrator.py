@@ -358,11 +358,17 @@ def run_cio_council_deliberation(
     if has_veto:
         composite_score = min(composite_score, 38)
         council_verdict = "INSTITUTIONAL_VETO"
-        executive_summary = (
-            f"The 5-Agent Council has VETOED the original levels. {quant_r2['verdict_rationale']} | "
-            f"Counterfactual proposal identified: Target ₹{cf_restructured['target']} / SL ₹{cf_restructured['stoploss']} "
-            f"(+{counterfactual['improvement_hit_prob_pct']}% hit prob)."
-        )
+        if counterfactual.get("was_restructured"):
+            executive_summary = (
+                f"The 5-Agent Council has VETOED the original levels. {quant_r2['verdict_rationale']} | "
+                f"Counterfactual equilibrium identified: Target ₹{cf_restructured['target']} / SL ₹{cf_restructured['stoploss']} "
+                f"({counterfactual['improvement_hit_prob_pct']:+.1f}% hit prob, {risk_r2['restructured_post_tax_ev_pct']:+.2f}% post-tax EV)."
+            )
+        else:
+            executive_summary = (
+                f"The 5-Agent Council has VETOED this trade setup. {quant_r2['verdict_rationale']} "
+                f"No asymmetric positive-EV barrier exists at the current volatility regime."
+            )
     elif composite_score >= 70:
         council_verdict = "HIGH_CONVICTION_EXECUTE"
         executive_summary = (
@@ -382,16 +388,24 @@ def run_cio_council_deliberation(
             f"Weak risk-reward profile ({composite_score}/100). First-passage odds do not justify capital commitment."
         )
 
-    # Restructured setup verdict
+    # Restructured setup verdict (uses identical veto & scoring gates as composite_score for 100% consistency)
     cf_score = int(
         (cf_restructured["conviction_score"] * w_quant)
         + (forensic_r2_score * w_forensic)
         + (risk_r2["conviction_score"] * w_risk)
         + (perception_eval["conviction_score"] * w_perception)
     )
-    if cf_score >= 70 and cf_restructured["p_target_first"] >= 0.50:
+    cf_has_veto = (
+        cf_restructured.get("vote") == "BEARISH_VETO"
+        or risk_r2["vote"] == "RISK_VETO"
+        or not perception_eval["sebi_compliant"]
+    )
+    if cf_has_veto:
+        cf_score = min(cf_score, 38)
+        cf_verdict = "DEFENSIVE_WAIT"
+    elif cf_score >= 70 and cf_restructured["p_target_first"] >= 0.48:
         cf_verdict = "COUNCIL_RESTRUCTURED_BUY"
-    elif cf_score >= 52:
+    elif cf_score >= 50:
         cf_verdict = "MODERATE_RESTRUCTURED"
     else:
         cf_verdict = "DEFENSIVE_WAIT"

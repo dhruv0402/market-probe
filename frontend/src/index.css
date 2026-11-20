@@ -21,17 +21,19 @@
   --font-mono: 'JetBrains Mono', monospace;
 }
 
-body {
-  background-color: var(--bg-dark);
-  color: var(--text-main);
-  font-family: var(--font-sans);
-  overflow-x: hidden;
-  -webkit-font-smoothing: antialiased;
-}
+@layer base {
+  body {
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
 
-#root {
-  min-height: 100vh;
-  width: 100%;
+  #root {
+    min-height: 100vh;
+    width: 100%;
+  }
 }
 
 /* Custom Scrollbars */

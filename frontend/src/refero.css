@@ -21,12 +21,14 @@
 }
 
 /* Base resets & typography */
-body {
-  background-color: var(--canvas);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  overflow-x: hidden;
-  -webkit-font-smoothing: antialiased;
+@layer base {
+  body {
+    background-color: var(--canvas);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
 }
 
 /* Strict Monospace numerical data alignment */

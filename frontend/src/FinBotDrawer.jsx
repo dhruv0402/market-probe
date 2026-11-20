@@ -4,6 +4,7 @@ import {
   ChevronRight, Terminal, Shield, ArrowUpRight, Zap, Layers,
   ExternalLink, Bookmark, Calculator, Activity
 } from 'lucide-react';
+import MarkdownText from './MarkdownText.jsx';
 
 export default function FinBotDrawer({ isOpen, onClose, onNavigateTab }) {
   const [messages, setMessages] = useState([
@@ -71,7 +72,7 @@ export default function FinBotDrawer({ isOpen, onClose, onNavigateTab }) {
         ...prev,
         {
           role: 'assistant',
-          text: `Gateway notice: ${err.message}. FinBot backend on :8000 is ready to process queries.`,
+          text: `Gateway notice: ${err.message}. Verify the MarketProbe server on port 8080 is reachable.`,
           isError: true
         }
       ]);
@@ -125,7 +126,7 @@ export default function FinBotDrawer({ isOpen, onClose, onNavigateTab }) {
               <span style={{ fontSize: '13px', fontWeight: 700, color: '#f8fafc', letterSpacing: '0.02em' }}>FINBOT COPILOT</span>
               <span style={{ fontSize: '9px', background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', padding: '1px 5px', borderRadius: '2px', fontWeight: 600 }}>LIVE</span>
             </div>
-            <div style={{ fontSize: '10px', color: '#64748b' }}>CMD+K • Autonomous Actions • 2,448 Calls</div>
+            <div style={{ fontSize: '10px', color: '#64748b' }}>CMD+K • Autonomous Quant Actions • Live Ledger</div>
           </div>
         </div>
 
@@ -169,12 +170,16 @@ export default function FinBotDrawer({ isOpen, onClose, onNavigateTab }) {
               lineHeight: 1.55,
               whiteSpace: 'pre-wrap'
             }}>
-              {m.role === 'user' && (
-                <div style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 700, marginBottom: '4px', fontFamily: 'monospace' }}>
-                  &gt; PROMPT
-                </div>
+              {m.role === 'user' ? (
+                <>
+                  <div style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 700, marginBottom: '4px', fontFamily: 'monospace' }}>
+                    &gt; PROMPT
+                  </div>
+                  {m.text}
+                </>
+              ) : (
+                <MarkdownText content={m.text} />
               )}
-              {m.text}
 
               {/* Phase 4: Action Chips */}
               {m.action_chips && m.action_chips.length > 0 && (

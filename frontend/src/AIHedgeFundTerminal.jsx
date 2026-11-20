@@ -115,13 +115,52 @@ function getVoteMeta(code) {
   );
 }
 
+const SHORT_AGENT_VOTES = {
+  BULLISH: { text: 'Bullish', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
+  APPROVED: { text: 'Approved', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
+  COMPLIANT: { text: 'SEBI Pass', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
+  CREDIBLE: { text: 'Credible', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' },
+  HIGH_CONVICTION_EXECUTE: { text: 'Execute', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' },
+  COUNCIL_RESTRUCTURED_BUY: { text: 'Restructured', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' },
+  BEARISH_VETO: { text: 'Math Veto', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
+  RISK_VETO: { text: 'Risk Veto', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
+  INSTITUTIONAL_VETO: { text: 'Vetoed', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
+  SEBI_WARNING: { text: 'SEBI Flag', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
+  UNRELIABLE_FLAG: { text: 'Low Edge', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
+  AVERAGE: { text: 'Neutral', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/35' },
+  NEUTRAL: { text: 'Neutral', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/35' },
+  DIVERGENT_SIGNAL: { text: 'Divergent', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/35' },
+  UNVERIFIED_DESK: { text: 'Unverified', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/35' },
+  MODERATE_SPECULATIVE: { text: 'Moderate', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/40' },
+  MODERATE_RESTRUCTURED: { text: 'Improved', cls: 'bg-sky-500/15 text-sky-300 border-sky-500/40' },
+  DEFENSIVE_HOLD: { text: 'Defensive', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/35' },
+  DEFENSIVE_WAIT: { text: 'Wait', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/35' },
+  AVOID_SUBPAR_ALPHA: { text: 'Avoid', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
+};
+
+function getShortVoteMeta(code) {
+  return (
+    SHORT_AGENT_VOTES[code] || {
+      text: (code || 'Pending').replace(/_/g, ' ').slice(0, 14),
+      cls: 'bg-slate-700/40 text-slate-300 border-slate-600/40',
+    }
+  );
+}
+
+const ASSET_DISPLAY_LABELS = {
+  'Direct Equity': 'Direct Equity',
+  'Equity Funds': 'Equity MFs',
+  'Debt Instruments': 'Debt / G-Sec',
+  Gold: 'Gold ETF',
+};
+
 export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
   const [activeNav, setActiveNav] = useState('council'); // 'council' | 'dropzone' | 'quantlab'
   const [ticker, setTicker] = useState('RELIANCE');
   const [action, setAction] = useState('BUY');
-  const [entryPrice, setEntryPrice] = useState(2980);
-  const [targetPrice, setTargetPrice] = useState(3240);
-  const [stoplossPrice, setStoplossPrice] = useState(2890);
+  const [entryPrice, setEntryPrice] = useState(1378);
+  const [targetPrice, setTargetPrice] = useState(1495);
+  const [stoplossPrice, setStoplossPrice] = useState(1330);
   const [creatorName, setCreatorName] = useState('Motilal Oswal');
   const [horizonDays, setHorizonDays] = useState(30);
   const [userDirective, setUserDirective] = useState('');
@@ -177,9 +216,13 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
       const res = await fetch('/api/home-feed?min_conviction=0');
       if (res.ok) {
         const data = await res.json();
-        if (data?.stats?.total_calls) setUniverseCount(data.stats.total_calls);
+        const total = data?.stats?.total_tips_tracked || data?.stats?.total_calls;
+        if (total) setUniverseCount(total);
         if (Array.isArray(data?.recent_tips)) {
-          setLiveQueue(data.recent_tips.slice(0, 6));
+          const cleanCalls = data.recent_tips.filter(
+            (t) => t.ticker && !String(t.ticker).startsWith('^') && Number(t.entry_price) >= 15
+          );
+          setLiveQueue(cleanCalls.slice(0, 8));
         }
       }
     } catch (e) {
@@ -454,32 +497,27 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
   const verdictMeta = getVoteMeta(auditResult?.council_verdict);
 
   return (
-    <div className="bg-[#06090e] text-[#e6ecf5] min-h-[calc(100vh-116px)] flex flex-col">
-      {/* 1. CLEAN WORKSTATION SUB-BAR */}
-      <div className="bg-[#0b0f17] border-b border-[#1b2434] px-5 py-2.5 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-              <Cpu className="w-4 h-4" />
+    <div className="bg-[#06090e] text-[#e6ecf5] min-h-[calc(100vh-90px)] flex flex-col">
+      {/* 1. COMPACT SINGLE-ROW WORKSTATION SUB-BAR */}
+      <div className="bg-[#0b0f17] border-b border-[#1b2434] px-4 py-2 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="w-6 h-6 rounded bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+              <Cpu className="w-3.5 h-3.5" />
             </div>
-            <div>
-              <div className="text-sm font-bold text-slate-100 leading-tight">
-                5-Agent Quantitative Council
-              </div>
-              <div className="text-[11px] text-slate-400 font-mono">
-                3-Round Peer Bus • Merton Monte Carlo • Empirical Bayes • Tail CVaR
-              </div>
-            </div>
+            <span className="text-xs font-bold text-slate-100 whitespace-nowrap">
+              5-Agent Quant Council
+            </span>
           </div>
 
           {/* Mode Tabs */}
-          <div className="flex items-center gap-1.5 bg-[#06090e] p-1 rounded border border-[#1b2434] ml-2">
+          <div className="flex items-center gap-1 bg-[#06090e] p-0.5 rounded border border-[#1b2434]">
             <button
               onClick={() => setActiveNav('council')}
-              className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                 activeNav === 'council'
                   ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/35'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-slate-400 hover:text-white border border-transparent'
               }`}
             >
               <Scale className="w-3.5 h-3.5" />
@@ -487,10 +525,10 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
             </button>
             <button
               onClick={() => setActiveNav('dropzone')}
-              className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                 activeNav === 'dropzone'
                   ? 'bg-sky-500/15 text-sky-300 border border-sky-500/35'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-slate-400 hover:text-white border border-transparent'
               }`}
             >
               <UploadCloud className="w-3.5 h-3.5" />
@@ -501,10 +539,10 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
                 setActiveNav('quantlab');
                 if (!mptResult || !taxResult) runQuantLabTools();
               }}
-              className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                 activeNav === 'quantlab'
                   ? 'bg-amber-500/15 text-amber-300 border border-amber-500/35'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-slate-400 hover:text-white border border-transparent'
               }`}
             >
               <BarChart2 className="w-3.5 h-3.5" />
@@ -514,25 +552,25 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
         </div>
 
         {/* Live Telemetry Status Pills */}
-        <div className="flex items-center gap-3 flex-wrap text-xs font-mono">
-          <div className="flex items-center gap-1.5 text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1 rounded">
-            <Radio className="w-3.5 h-3.5 animate-pulse" />
+        <div className="flex items-center gap-2 text-[11px] font-mono shrink-0">
+          <div className="flex items-center gap-1.5 text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 px-2 py-1 rounded whitespace-nowrap">
+            <Radio className="w-3 h-3 animate-pulse" />
             <span>
               {auditResult?.message_bus?.redis_synced ? 'Redis Bus Live' : 'In-Memory Bus'}
             </span>
           </div>
-          <div className="bg-[#111722] border border-[#1b2434] px-2.5 py-1 rounded text-slate-300">
+          <div className="bg-[#111722] border border-[#1b2434] px-2 py-1 rounded text-slate-300 whitespace-nowrap">
             Packets:{' '}
             <b className="text-sky-300 tabular-nums">
               {auditResult?.message_bus?.total_packets_exchanged ?? 0}
             </b>{' '}
-            • Convergence:{' '}
+            • Conv:{' '}
             <b className="text-emerald-300 tabular-nums">
               {auditResult?.message_bus?.consensus_convergence_pct ?? 0}%
             </b>
           </div>
-          <div className="bg-[#111722] border border-[#1b2434] px-2.5 py-1 rounded text-slate-300">
-            Audited Ledger: <b className="text-white tabular-nums">{universeCount}</b>
+          <div className="bg-[#111722] border border-[#1b2434] px-2 py-1 rounded text-slate-300 whitespace-nowrap">
+            Ledger: <b className="text-white tabular-nums">{universeCount.toLocaleString('en-IN')}</b>
           </div>
         </div>
       </div>
@@ -661,6 +699,7 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
               ) : (
                 liveQueue.map((item) => {
                   const sym = String(item.ticker || '').replace('.NS', '');
+                  const deskName = item.creator_name || item.influencer_name || 'Verified Desk';
                   return (
                     <button
                       key={item.id}
@@ -671,26 +710,26 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
                         setEntryPrice(item.entry_price || 1000);
                         setTargetPrice(item.target_price || 1080);
                         setStoplossPrice(item.stoploss_price || 950);
-                        setCreatorName(item.influencer_name || 'Verified Desk');
+                        setCreatorName(deskName);
                         runMultiAgentAudit({
                           ticker: sym,
                           action: (item.action || 'BUY').toUpperCase(),
                           entry_price: item.entry_price || 1000,
                           target_price: item.target_price || 1080,
                           stoploss_price: item.stoploss_price || 950,
-                          creator_name: item.influencer_name || 'Verified Desk',
+                          creator_name: deskName,
                         });
                       }}
-                      className={`w-full text-left p-2.5 rounded border transition-colors ${
+                      className={`w-full text-left p-2.5 rounded border transition-colors cursor-pointer ${
                         ticker === sym
                           ? 'bg-[#111722] border-sky-500/50'
                           : 'bg-[#06090e] border-[#1b2434] hover:border-slate-600'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-bold text-slate-100">{sym}</span>
                         <span
-                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0 ${
                             item.action === 'BUY'
                               ? 'bg-emerald-500/15 text-emerald-300'
                               : 'bg-rose-500/15 text-rose-300'
@@ -699,8 +738,9 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
                           {item.action} • ₹{item.entry_price}
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-400 truncate mt-1">
-                        {item.influencer_name || 'Analyst'} • Tgt ₹{item.target_price}
+                      <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400 mt-1">
+                        <span className="truncate">{deskName}</span>
+                        <span className="font-mono text-slate-300 shrink-0">Tgt ₹{item.target_price}</span>
                       </div>
                     </button>
                   );
@@ -735,7 +775,7 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
                     type="button"
                     onClick={() =>
                       setRawText(
-                        'Motilal Oswal recommends BUY on RELIANCE at ₹2980 with target ₹3240 and stop loss ₹2890 on O2C margin expansion.'
+                        'Motilal Oswal recommends BUY on RELIANCE at ₹1378 with target ₹1495 and stop loss ₹1330 on O2C margin expansion.'
                       )
                     }
                     className="btn-quant-tool text-xs py-1 px-2.5 text-sky-300 border-sky-500/30"
@@ -746,7 +786,7 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
                     type="button"
                     onClick={() =>
                       setRawText(
-                        'ICICI Direct initiates BUY on INFY around ₹1840 targeting ₹2020 with strict stoploss ₹1750 on US BFSI recovery.'
+                        'ICICI Direct initiates BUY on INFY around ₹1098 targeting ₹1195 with strict stoploss ₹1055 on US BFSI recovery.'
                       )
                     }
                     className="btn-quant-tool text-xs py-1 px-2.5 text-emerald-300 border-emerald-500/30"
@@ -865,18 +905,36 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
                   </div>
 
                   {mptResult?.max_sharpe_portfolio && (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs font-mono">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
                       {Object.entries(mptResult.max_sharpe_portfolio.weights_pct || {}).map(
                         ([asset, wt]) => (
                           <div
                             key={asset}
                             className="bg-[#111722] border border-[#1b2434] p-2.5 rounded"
                           >
-                            <div className="text-[11px] text-slate-400 truncate">{asset}</div>
-                            <div className="text-base font-bold text-white mt-0.5">{wt}%</div>
+                            <div className="text-[11px] text-slate-400">
+                              {ASSET_DISPLAY_LABELS[asset] || asset}
+                            </div>
+                            <div className="text-base font-bold text-white mt-0.5 tabular-nums">{wt}%</div>
                           </div>
                         )
                       )}
+                    </div>
+                  )}
+
+                  {mptResult?.max_sharpe_portfolio && (
+                    <div className="flex items-center justify-between text-[11px] font-mono bg-[#06090e] border border-[#1b2434] rounded px-3 py-1.5 text-slate-300">
+                      <span>
+                        Tangency Return:{' '}
+                        <b className="text-emerald-400">{mptResult.max_sharpe_portfolio.expected_return_pct}%</b>
+                      </span>
+                      <span>
+                        Volatility:{' '}
+                        <b className="text-sky-300">{mptResult.max_sharpe_portfolio.volatility_pct}%</b>
+                      </span>
+                      <span>
+                        Risk-Free: <b className="text-slate-200">6.5%</b>
+                      </span>
                     </div>
                   )}
 
@@ -887,30 +945,44 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
                           <CartesianGrid strokeDasharray="3 3" stroke="#1b2434" />
                           <XAxis
                             dataKey="volatility_pct"
+                            type="number"
+                            domain={['dataMin - 1', 'dataMax + 1']}
                             stroke="#64748b"
-                            tick={{ fontSize: 11 }}
-                            unit="%"
+                            tick={{ fontSize: 10 }}
+                            tickFormatter={(v) => `${Number(v).toFixed(1)}%`}
                           />
                           <YAxis
                             dataKey="expected_return_pct"
+                            type="number"
+                            domain={['dataMin - 1', 'dataMax + 1']}
                             stroke="#64748b"
-                            tick={{ fontSize: 11 }}
-                            unit="%"
+                            tick={{ fontSize: 10 }}
+                            tickFormatter={(v) => `${Number(v).toFixed(0)}%`}
                           />
                           <Tooltip
                             contentStyle={{
                               backgroundColor: '#111722',
                               borderColor: '#1b2434',
-                              fontSize: '12px',
+                              fontSize: '11px',
                             }}
+                            formatter={(val) => [`${val}%`, 'Expected Return']}
+                            labelFormatter={(lbl) => `Annualized Vol: ${lbl}%`}
                           />
+                          {mptResult?.max_sharpe_portfolio?.volatility_pct && (
+                            <ReferenceLine
+                              x={mptResult.max_sharpe_portfolio.volatility_pct}
+                              stroke="#38bdf8"
+                              strokeDasharray="3 3"
+                            />
+                          )}
                           <Line
                             type="monotone"
                             dataKey="expected_return_pct"
                             name="Expected Return %"
                             stroke="#10b981"
                             strokeWidth={2.5}
-                            dot={{ r: 3, fill: '#38bdf8' }}
+                            dot={{ r: 2.5, fill: '#38bdf8' }}
+                            activeDot={{ r: 5, fill: '#10b981' }}
                           />
                         </LineChart>
                       </ResponsiveContainer>
@@ -1150,13 +1222,20 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
                         Counterfactual Trade Restructuring (Quant + Risk Negotiation)
                       </span>
                     </div>
-                    <button
-                      onClick={handleApplyCounterfactual}
-                      className="px-3.5 py-1.5 rounded bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <Zap className="w-3.5 h-3.5" />
-                      <span>Apply Council Restructured Levels</span>
-                    </button>
+                    {cfData.was_restructured ? (
+                      <button
+                        onClick={handleApplyCounterfactual}
+                        className="px-3.5 py-1.5 rounded bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        <span>Apply Council Restructured Levels</span>
+                      </button>
+                    ) : (
+                      <span className="px-3 py-1 rounded bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 font-semibold text-xs flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Equilibrium Levels Active</span>
+                      </span>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -1237,9 +1316,9 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
                       Bayesian Peer Recalibration Active
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2.5">
                     {auditResult.agents_roster.map((ag) => {
-                      const vm = getVoteMeta(ag.vote);
+                      const vm = getShortVoteMeta(ag.vote);
                       const isActiveSender = activeReplayPacket?.sender === ag.agent_id;
                       const isActiveRecipient =
                         activeReplayPacket?.recipient === ag.agent_id ||
@@ -1248,7 +1327,7 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
                       return (
                         <div
                           key={ag.agent_id}
-                          className={`bg-[#0b0f17] rounded-lg p-3 border transition-all space-y-2.5 ${
+                          className={`bg-[#0b0f17] rounded-lg p-3 border transition-all flex flex-col justify-between gap-2 min-w-0 ${
                             isActiveSender
                               ? 'border-sky-400 ring-2 ring-sky-400/30'
                               : isActiveRecipient
@@ -1256,35 +1335,52 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
                               : 'border-[#1b2434]'
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <span className="text-xs font-bold text-white leading-snug">
+                          <div className="space-y-1.5 min-w-0">
+                            <div className="text-xs font-bold text-white leading-tight truncate">
                               {ag.name}
-                            </span>
-                            <span
-                              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${vm.cls}`}
-                            >
-                              {vm.text}
-                            </span>
+                            </div>
+                            <div>
+                              <span
+                                className={`inline-flex items-center text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap ${vm.cls}`}
+                              >
+                                {vm.text}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-400 leading-snug line-clamp-2">
+                              {ag.role}
+                            </div>
                           </div>
-                          <div className="text-[11px] text-slate-400 leading-snug">{ag.role}</div>
-                          <div className="bg-[#111722] px-2.5 py-1.5 rounded border border-[#141b27] flex items-center justify-between text-xs font-mono tabular-nums">
-                            <span className="text-slate-400">
-                              R1 <b className="text-white">{ag.round_1_score}</b> → R3{' '}
-                              <b className="text-sky-300">{ag.round_3_score}</b>
-                            </span>
-                            <span
-                              className={`font-bold ${
-                                ag.conviction_delta > 0
-                                  ? 'text-emerald-400'
-                                  : ag.conviction_delta < 0
-                                  ? 'text-rose-400'
-                                  : 'text-slate-400'
-                              }`}
-                            >
-                              {ag.conviction_delta > 0
-                                ? `+${ag.conviction_delta}`
-                                : ag.conviction_delta}
-                            </span>
+                          <div className="space-y-1.5">
+                            <div className="h-1 w-full bg-[#141b27] rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${
+                                  ag.round_3_score >= 65
+                                    ? 'bg-emerald-400'
+                                    : ag.round_3_score >= 45
+                                    ? 'bg-amber-400'
+                                    : 'bg-rose-400'
+                                }`}
+                                style={{ width: `${Math.min(100, Math.max(8, ag.round_3_score))}%` }}
+                              />
+                            </div>
+                            <div className="bg-[#111722] px-2 py-1 rounded border border-[#141b27] flex items-center justify-between text-[11px] font-mono tabular-nums">
+                              <span className="text-slate-400">
+                                R1 <b className="text-white">{ag.round_1_score}</b>→<b className="text-sky-300">{ag.round_3_score}</b>
+                              </span>
+                              <span
+                                className={`font-bold ${
+                                  ag.conviction_delta > 0
+                                    ? 'text-emerald-400'
+                                    : ag.conviction_delta < 0
+                                    ? 'text-rose-400'
+                                    : 'text-slate-400'
+                                }`}
+                              >
+                                {ag.conviction_delta > 0
+                                  ? `+${ag.conviction_delta}`
+                                  : ag.conviction_delta}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       );
@@ -1388,7 +1484,22 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
                           <CartesianGrid strokeDasharray="3 3" stroke="#141b27" />
                           <XAxis dataKey="time" stroke="#64748b" tick={{ fontSize: 10 }} />
                           <YAxis
-                            domain={['auto', 'auto']}
+                            domain={[
+                              (dataMin) => {
+                                const vals = [dataMin];
+                                if (auditResult?.stoploss && Math.abs(auditResult.stoploss - dataMin) / Math.max(1, dataMin) < 0.35) {
+                                  vals.push(auditResult.stoploss);
+                                }
+                                return Math.floor(Math.min(...vals) * 0.985);
+                              },
+                              (dataMax) => {
+                                const vals = [dataMax];
+                                if (auditResult?.target && Math.abs(auditResult.target - dataMax) / Math.max(1, dataMax) < 0.35) {
+                                  vals.push(auditResult.target);
+                                }
+                                return Math.ceil(Math.max(...vals) * 1.015);
+                              },
+                            ]}
                             stroke="#64748b"
                             tick={{ fontSize: 10 }}
                           />
@@ -1404,6 +1515,20 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
                               y={auditResult.entry}
                               stroke="#38bdf8"
                               strokeDasharray="3 3"
+                            />
+                          )}
+                          {auditResult?.target && (
+                            <ReferenceLine
+                              y={auditResult.target}
+                              stroke="#10b981"
+                              strokeDasharray="4 4"
+                            />
+                          )}
+                          {auditResult?.stoploss && (
+                            <ReferenceLine
+                              y={auditResult.stoploss}
+                              stroke="#f43f5e"
+                              strokeDasharray="4 4"
                             />
                           )}
                           <Area
@@ -1480,17 +1605,17 @@ export default function AIHedgeFundTerminal({ selectedSetup, onNavigateTab }) {
                             : 'bg-[#111722] border-[#1b2434]'
                         }`}
                       >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 flex-wrap font-mono text-[11px]">
-                            <span className="text-slate-500">
-                              Round {pkt.round} • +{pkt.timestamp_ms}ms
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 font-mono text-[11px] min-w-0 flex-wrap">
+                            <span className="text-slate-500 shrink-0">
+                              R{pkt.round} • +{pkt.timestamp_ms}ms
                             </span>
-                            <b className="text-sky-300">{pkt.sender_name}</b>
-                            <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
-                            <b className="text-emerald-300">{pkt.recipient_name}</b>
+                            <b className="text-sky-300 truncate">{pkt.sender_name}</b>
+                            <ArrowRight className="w-3 h-3 text-slate-500 shrink-0" />
+                            <b className="text-emerald-300 truncate">{pkt.recipient_name}</b>
                           </div>
                           <span
-                            className={`px-2 py-0.5 rounded border text-[10px] font-semibold ${intentMeta.cls}`}
+                            className={`px-2 py-0.5 rounded border text-[10px] font-semibold shrink-0 whitespace-nowrap ${intentMeta.cls}`}
                           >
                             {intentMeta.label}
                           </span>

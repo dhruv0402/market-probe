@@ -38,12 +38,12 @@ const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('en-IN', { maxi
 const inr = (n) => (n == null ? '—' : '₹' + fmt(n));
 
 const PRIMARY_TABS = [
-  { id: 'TERMINAL', label: '5-Agent Council', icon: Activity },
-  { id: 'FEED', label: 'Verified Feed', icon: Rss },
-  { id: 'RANKINGS', label: 'Creator Rankings', icon: Trophy },
-  { id: 'SIMULATOR', label: 'P&L Simulator', icon: Calculator },
-  { id: 'FINBOT', label: 'FinBot AI Hub', icon: Sparkles },
-  { id: 'DATASET', label: 'Dataset & Rigor', icon: Database },
+  { id: 'TERMINAL', label: 'Council', icon: Activity },
+  { id: 'FEED', label: 'Feed', icon: Rss },
+  { id: 'RANKINGS', label: 'Rankings', icon: Trophy },
+  { id: 'SIMULATOR', label: 'Simulator', icon: Calculator },
+  { id: 'FINBOT', label: 'FinBot', icon: Sparkles },
+  { id: 'DATASET', label: 'Dataset', icon: Database },
 ];
 
 const MORE_TABS = [
@@ -296,9 +296,9 @@ function OAuthModal({ open, onClose, onAuth }) {
 /* ---------------------------------- INSTITUTIONAL TERMINAL BADGE ---------------------------------- */
 function TerminalStatusIndicator() {
   return (
-    <div className="terminal-status-chip" title="NSE Direct Sub-Second Tick Feed Active">
+    <div className="terminal-status-chip" title="NSE Direct Tick Feed Active">
       <span className="live-dot" />
-      <span className="status-text">NSE TICK FEED ONLINE</span>
+      <span className="status-text">NSE LIVE</span>
     </div>
   );
 }
@@ -1426,7 +1426,7 @@ function Feed({ data, loading, error, onSelectStock, onAuditInCouncil }) {
     return (
       (t.ticker || '').toLowerCase().includes(s) ||
       (t.company_name || '').toLowerCase().includes(s) ||
-      (t.influencer_name || '').toLowerCase().includes(s)
+      (t.creator_name || t.influencer_name || '').toLowerCase().includes(s)
     );
   });
 
@@ -1481,7 +1481,7 @@ function Feed({ data, loading, error, onSelectStock, onAuditInCouncil }) {
                             })
                           }
                         >
-                          ⚡ Audit
+                          <Zap size={11} /> Audit
                         </button>
                       )}
                       <a 
@@ -1595,8 +1595,8 @@ function Feed({ data, loading, error, onSelectStock, onAuditInCouncil }) {
             {p === 'ALL' ? 'All Channels' : p}
           </button>
         ))}
-        <button className={`chip ${hiConv ? 'on' : ''}`} onClick={() => setHiConv(!hiConv)}>
-          ⚡ High Conviction Only (&gt;60%)
+        <button className={`chip ${hiConv ? 'on' : ''}`} onClick={() => setHiConv(!hiConv)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          <Zap size={13} /> High Conviction (&gt;60%)
         </button>
         <div className="count">Showing <b>{shown.length}</b> calls</div>
       </div>
@@ -1718,7 +1718,7 @@ function StocksRadar() {
 }
 
 /* -------------------------------- ALERTS ---------------------------------- */
-function AlphaAlerts() {
+function AlphaAlerts({ onAuditInCouncil }) {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [minConv, setMinConv] = useState(60);
@@ -1749,14 +1749,15 @@ function AlphaAlerts() {
       </div>
 
       <div className="toolbar">
-        <span style={{ fontSize: 13.5, color: 'var(--muted)', fontWeight: 600 }}>Filter Min Conviction:</span>
+        <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 600 }}>Filter Min Conviction:</span>
         {[50, 60, 65, 70].map((score) => (
           <button 
             key={score} 
             className={`chip ${minConv === score ? 'on' : ''}`}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
             onClick={() => setMinConv(score)}
           >
-            ⚡ &ge; {score}% Score
+            <Zap size={12} /> &ge; {score}% Score
           </button>
         ))}
         <div className="count"><b>{alerts.length}</b> Live Filtered Alerts</div>
@@ -1765,25 +1766,25 @@ function AlphaAlerts() {
       {loading ? (
         <div className="row" style={{ justifyContent: 'center', padding: 60 }}><Loader2 className="spin" /></div>
       ) : (
-        <div className="grid-feed" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))' }}>
+        <div className="grid-feed" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))' }}>
           {alerts.map((a) => (
-            <div key={a.id} className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div key={a.id} className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="row between">
                 <div className="row">
-                  <span className={`pill ${a.action === 'BUY' ? 'pill-buy' : 'pill-sell'}`} style={{ fontSize: 13, padding: '4px 10px' }}>
-                    {a.action} {a.ticker}
+                  <span className={`pill ${a.action === 'BUY' ? 'pill-buy' : 'pill-sell'}`} style={{ fontSize: 12.5, padding: '4px 10px' }}>
+                    {a.action} {String(a.ticker).replace('.NS', '')}
                   </span>
-                  {a.is_sebi && <span className="pill pill-sebi">✓ SEBI</span>}
+                  {a.is_sebi && <span className="pill pill-sebi">SEBI REG</span>}
                 </div>
-                <span className="pill pill-hit" style={{ fontSize: 13, padding: '4px 10px' }}>
+                <span className="pill pill-hit" style={{ fontSize: 12.5, padding: '4px 10px' }}>
                   {a.ai_conviction_score}% Conviction
                 </span>
               </div>
 
               <div className="row between">
                 <div>
-                  <div style={{ fontWeight: 800, fontSize: 15 }}>{a.creator}</div>
-                  <div style={{ fontSize: 12, color: 'var(--dim)' }}>{a.platform} · {String(a.timestamp).slice(0, 16)}</div>
+                  <div style={{ fontWeight: 800, fontSize: 14.5 }}>{a.creator}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--dim)' }}>{a.platform} · {String(a.timestamp).slice(0, 16)}</div>
                 </div>
                 <span className={`pill ${a.status === 'HIT' ? 'pill-hit' : a.status === 'MISS' ? 'pill-miss' : 'pill-open'}`}>
                   {a.status}
@@ -1796,14 +1797,32 @@ function AlphaAlerts() {
                 <div className="level"><small>Stop Loss</small><b style={{ color: '#fb7185' }}>{inr(a.stoploss_price)}</b></div>
               </div>
 
-              <div className="row between" style={{ marginTop: 'auto', paddingTop: 10, borderTop: '1px solid var(--line)' }}>
-                <span style={{ fontSize: 12, color: 'var(--dim)' }}>Instant Webhook Broadcast Format</span>
+              <div className="row between" style={{ marginTop: 'auto', paddingTop: 10, borderTop: '1px solid var(--line)', gap: 8 }}>
+                {onAuditInCouncil && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ fontSize: 12, padding: '6px 12px' }}
+                    onClick={() =>
+                      onAuditInCouncil({
+                        ticker: a.ticker,
+                        action: a.action,
+                        entry_price: a.entry_price,
+                        target_price: a.target_price,
+                        stoploss_price: a.stoploss_price,
+                        creator_name: a.creator,
+                      })
+                    }
+                  >
+                    <Activity size={13} /> Audit in Council
+                  </button>
+                )}
                 <button 
                   className={`btn ${copiedId === a.id ? 'btn-primary' : 'btn-ghost'}`} 
                   onClick={() => copyTelegram(a)}
-                  style={{ fontSize: 12.5, padding: '6px 12px' }}
+                  style={{ fontSize: 12, padding: '6px 12px', marginLeft: 'auto' }}
                 >
-                  {copiedId === a.id ? '✓ Copied Telegram Alert' : 'Copy Telegram Push Payload'}
+                  <Copy size={12} /> {copiedId === a.id ? 'Copied Alert' : 'Copy Webhook'}
                 </button>
               </div>
             </div>
@@ -1860,13 +1879,13 @@ function Rankings() {
       </div>
 
       {/* Filter and Mode Toggles */}
-      <div className="row" style={{ gap: 10, marginBottom: 20 }}>
+      <div className="row" style={{ gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <button 
           className={`btn ${filterMode === 'ALL' ? 'btn-primary' : 'btn-ghost'}`}
           onClick={() => setFilterMode('ALL')}
           style={{ fontSize: 13, padding: '8px 16px' }}
         >
-          🏆 All Verified Creators
+          <Trophy size={14} /> All Verified Creators
         </button>
         <button 
           className={`btn ${filterMode === 'SEBI_ONLY' ? 'btn-primary' : 'btn-ghost'}`}
@@ -1878,9 +1897,9 @@ function Rankings() {
         <button 
           className={`btn ${filterMode === 'HALL_OF_SHAME' ? 'btn-primary' : 'btn-ghost'}`}
           onClick={() => setFilterMode('HALL_OF_SHAME')}
-          style={{ fontSize: 13, padding: '8px 16px', borderColor: filterMode === 'HALL_OF_SHAME' ? '#fb7185' : undefined, background: filterMode === 'HALL_OF_SHAME' ? '#e11d48' : undefined }}
+          style={{ fontSize: 13, padding: '8px 16px', borderColor: filterMode === 'HALL_OF_SHAME' ? '#fb7185' : undefined, background: filterMode === 'HALL_OF_SHAME' ? '#e11d48' : undefined, color: filterMode === 'HALL_OF_SHAME' ? '#fff' : undefined }}
         >
-          ⚠️ Finfluencer "Hall of Shame" (Lowest Accuracy & High Drawdown)
+          <AlertTriangle size={14} /> Lowest Accuracy &amp; High Drawdown
         </button>
       </div>
 
@@ -2100,8 +2119,8 @@ function Simulator() {
 }
 
 /* --------------------------------- CHECKER -------------------------------- */
-function Checker() {
-  const [text, setText] = useState('Buy RELIANCE at 2900, target 3100, stop loss 2800');
+function Checker({ onAuditInCouncil }) {
+  const [text, setText] = useState('Buy RELIANCE at 1378, target 1495, stop loss 1330');
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -2130,7 +2149,7 @@ function Checker() {
           style={{ width: '100%', resize: 'vertical', fontSize: 15 }} 
           value={text} 
           onChange={(e) => setText(e.target.value)} 
-          placeholder="e.g. TATAMOTORS buy above 950, tgt 1020, SL 920" 
+          placeholder="e.g. RELIANCE buy above 1378, tgt 1495, SL 1330" 
         />
         <div className="row between" style={{ marginTop: 14, flexWrap: 'wrap', gap: 10 }}>
           <div className="row" style={{ gap: 8 }}>
@@ -2149,24 +2168,24 @@ function Checker() {
           <button 
             type="button" 
             className="btn btn-ghost" 
-            style={{ fontSize: 11.5, padding: '3px 8px' }}
-            onClick={() => setText('TATAMOTORS breaking out above 970 with target 1080 and SL at 930. Heavy delivery volumes!')}
+            style={{ fontSize: 11.5, padding: '4px 10px' }}
+            onClick={() => setText('ICICIBANK breaking out above 1640 with target 1785 and SL at 1580. Heavy delivery volumes!')}
           >
             English Breakout
           </button>
           <button 
             type="button" 
             className="btn btn-ghost" 
-            style={{ fontSize: 11.5, padding: '3px 8px' }}
-            onClick={() => setText('RELIANCE kal 1160 ke upar buy karo, target 1300 aur stop loss 1120 rakhna')}
+            style={{ fontSize: 11.5, padding: '4px 10px' }}
+            onClick={() => setText('RELIANCE kal 1378 ke upar buy karo, target 1495 aur stop loss 1330 rakhna')}
           >
-            🇮🇳 Hinglish YouTube Forward
+            Hinglish YouTube Forward
           </button>
           <button 
             type="button" 
             className="btn btn-ghost" 
-            style={{ fontSize: 11.5, padding: '3px 8px' }}
-            onClick={() => setText('HDFCBANK long above 710 target 780 sl 685 strict stoploss')}
+            style={{ fontSize: 11.5, padding: '4px 10px' }}
+            onClick={() => setText('HDFCBANK long above 846 target 920 sl 812 strict stoploss')}
           >
             Telegram Desk Call
           </button>
@@ -2176,17 +2195,37 @@ function Checker() {
       {err && <div className="err" style={{ marginTop: 16 }}>{err}</div>}
 
       {res && (
-        <div className="card" style={{ padding: 26, marginTop: 22, border: '1px solid rgba(16,185,129,0.3)' }}>
-          <div className="row between">
+        <div className="card" style={{ padding: 24, marginTop: 20, border: '1px solid rgba(16,185,129,0.3)' }}>
+          <div className="row between" style={{ flexWrap: 'wrap', gap: 10 }}>
             <div>
               <h3 style={{ margin: 0, fontSize: 18 }}>{res.verdict_title || 'Audited Setup Analysis'}</h3>
               <div style={{ color: 'var(--dim)', fontSize: 12, marginTop: 2 }}>{res.status}</div>
             </div>
-            {res.ai_conviction_score != null && (
-              <span className={`pill ${res.ai_conviction_score >= 60 ? 'pill-hit' : res.ai_conviction_score >= 50 ? 'pill-open' : 'pill-miss'}`} style={{ fontSize: 13, padding: '6px 12px' }}>
-                {res.ai_conviction_score}% Model Conviction
-              </span>
-            )}
+            <div className="row" style={{ gap: 8 }}>
+              {res.ai_conviction_score != null && (
+                <span className={`pill ${res.ai_conviction_score >= 60 ? 'pill-hit' : res.ai_conviction_score >= 50 ? 'pill-open' : 'pill-miss'}`} style={{ fontSize: 13, padding: '6px 12px' }}>
+                  {res.ai_conviction_score}% Model Conviction
+                </span>
+              )}
+              {onAuditInCouncil && res.ticker && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() =>
+                    onAuditInCouncil({
+                      ticker: res.ticker,
+                      action: res.action || 'BUY',
+                      entry_price: res.extracted_entry,
+                      target_price: res.extracted_target,
+                      stoploss_price: res.extracted_stoploss,
+                      creator_name: 'Fact-Check Submission',
+                    })
+                  }
+                >
+                  <Activity size={14} /> Run 5-Agent Council Audit <ArrowRight size={14} />
+                </button>
+              )}
+            </div>
           </div>
 
           {res.ai_recommendation && (
@@ -2321,18 +2360,33 @@ function WatchlistComponent() {
         </div>
       </div>
 
-      <div className="card" style={{ padding: 22, marginBottom: 20 }}>
-        <form onSubmit={handleAdd} className="row" style={{ gap: 12 }}>
+      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+        <form onSubmit={handleAdd} className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
           <input 
             className="input" 
-            style={{ maxWidth: 320, textTransform: 'uppercase' }} 
+            style={{ minWidth: 320, flex: '0 1 360px', textTransform: 'uppercase' }} 
             value={newSym} 
             onChange={(e) => setNewSym(e.target.value)} 
             placeholder="Add NSE Symbol (e.g. RELIANCE, TCS, INFY)" 
           />
           <button type="submit" className="btn btn-primary" disabled={busy}>
-            {busy ? <Loader2 size={16} className="spin" /> : <Bookmark size={16} />} Track Symbol
+            {busy ? <Loader2 size={15} className="spin" /> : <Bookmark size={15} />} Track Symbol
           </button>
+          <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginLeft: 'auto' }}>
+            <span style={{ fontSize: 11.5, color: 'var(--dim)' }}>Quick add:</span>
+            {['RELIANCE', 'HDFCBANK', 'INFY', 'ICICIBANK', 'TCS', 'BHARTIARTL'].map((sym) => (
+              <button
+                key={sym}
+                type="button"
+                className="btn btn-ghost"
+                style={{ fontSize: 11, padding: '4px 9px' }}
+                disabled={busy}
+                onClick={() => handleToggle(sym)}
+              >
+                + {sym}
+              </button>
+            ))}
+          </div>
         </form>
         {msg && <div style={{ marginTop: 10, fontSize: 13, color: 'var(--green2)' }}>{msg}</div>}
       </div>
@@ -2465,7 +2519,7 @@ function BillingComponent({ user, onUserUpdate }) {
       localStorage.setItem('mp_user', JSON.stringify(updatedUser));
       if (onUserUpdate) onUserUpdate(updatedUser);
 
-      setMsg(`🎉 ${verification.message}`);
+      setMsg(`${verification.message}`);
     } catch (ex) {
       setMsg(`Payment failed: ${ex.message}`);
     } finally {
@@ -2487,8 +2541,8 @@ function BillingComponent({ user, onUserUpdate }) {
       <div className="card" style={{ padding: '16px 22px', marginBottom: 24, background: 'rgba(16, 185, 129, 0.05)', borderColor: 'rgba(16, 185, 129, 0.25)' }}>
         <div className="row between" style={{ flexWrap: 'wrap', gap: 14 }}>
           <div className="row" style={{ gap: 14 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--green2)', letterSpacing: 0.5 }}>
-              ⚡ NATIVE RAZORPAY SETTLEMENT
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--green2)', letterSpacing: 0.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Zap size={13} /> NATIVE RAZORPAY SETTLEMENT
             </span>
             <span style={{ color: 'var(--dim)', fontSize: 13 }}>|</span>
             <span style={{ fontSize: 13, color: 'var(--text)' }}>
@@ -2519,7 +2573,7 @@ function BillingComponent({ user, onUserUpdate }) {
             </div>
             <p style={{ color: 'var(--dim)', fontSize: 14 }}>Essential access to historical YouTube finfluencer audits with delayed quotes.</p>
             <ul style={{ paddingLeft: 20, fontSize: 13.5, lineHeight: 1.8, color: 'var(--text)' }}>
-              <li>Access to 995+ audited public recommendations</li>
+              <li>Access to 2,460+ audited public recommendations</li>
               <li>Basic creator win-rate metrics</li>
               <li>Single stock search & NLP fact-check</li>
             </ul>
@@ -2559,25 +2613,25 @@ function BillingComponent({ user, onUserUpdate }) {
         </div>
 
         {/* INSTITUTIONAL HEDGE FUND TIER */}
-        <div className="card" style={{ padding: 28, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: '1px solid rgba(139, 92, 246, 0.4)' }}>
+        <div className="card" style={{ padding: 28, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: '1px solid rgba(56, 189, 248, 0.4)' }}>
           <div>
-            <div className="pill pill-open" style={{ marginBottom: 12, background: 'rgba(139, 92, 246, 0.15)', color: '#c084fc' }}>HEDGE FUND & DESK</div>
+            <div className="pill pill-sebi" style={{ marginBottom: 12 }}>HEDGE FUND &amp; DESK</div>
             <h3 style={{ margin: '0 0 6px', fontSize: 22 }}>Institutional Desk</h3>
             <div style={{ fontSize: 32, fontWeight: 900, margin: '14px 0', fontFamily: 'var(--mono)' }}>
               ₹9,999 <span style={{ fontSize: 14, color: 'var(--dim)', fontFamily: 'Inter' }}>/ month</span>
             </div>
             <p style={{ color: 'var(--dim)', fontSize: 14 }}>High-throughput REST and WebSocket programmatic access with dedicated quotas.</p>
             <ul style={{ paddingLeft: 20, fontSize: 13.5, lineHeight: 1.8, color: 'var(--text)' }}>
-              <li>Full REST API & WebSocket tick stream</li>
+              <li>Full REST API &amp; WebSocket tick stream</li>
               <li>Developer X-API-KEY with custom quotas</li>
-              <li>Automated SEBI compliance audit reports & export</li>
+              <li>Automated SEBI compliance audit reports &amp; export</li>
               <li>Dedicated cloud worker threadpool execution</li>
-              <li>Priority phone & WhatsApp desk support</li>
+              <li>Priority phone &amp; WhatsApp desk support</li>
             </ul>
           </div>
           <button 
             className="btn btn-primary btn-lg" 
-            style={{ marginTop: 24, width: '100%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', justifyContent: 'center' }}
+            style={{ marginTop: 24, width: '100%', background: 'linear-gradient(135deg, #0284c7, #0ea5e9)', color: '#f8fafc', justifyContent: 'center' }}
             onClick={() => handleRazorpayCheckout('enterprise')}
             disabled={busy || user?.tier === 'enterprise'}
           >
@@ -2591,7 +2645,7 @@ function BillingComponent({ user, onUserUpdate }) {
 }
 
 /* --------------------------------- DATASET -------------------------------- */
-function Dataset() {
+function Dataset({ onAuditInCouncil }) {
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState('');
   const [page, setPage] = useState(0);
@@ -2617,10 +2671,10 @@ function Dataset() {
     setIngestMsg('');
     try {
       const res = await api('/pipeline/run', { method: 'POST' });
-      setIngestMsg(`✅ Ingested ${res.pipeline_summary?.ingested_count || 4} fresh recommendations!`);
+      setIngestMsg(`Ingested ${res.pipeline_summary?.ingested_count || 4} fresh recommendations.`);
       loadData();
     } catch (err) {
-      setIngestMsg(`❌ ${err.message || 'Pipeline trigger failed'}`);
+      setIngestMsg(`Error: ${err.message || 'Pipeline trigger failed'}`);
     } finally {
       setIngesting(false);
     }
@@ -2682,7 +2736,8 @@ function Dataset() {
               <th>Entry Price</th>
               <th>Target Price</th>
               <th>Stop Loss</th>
-              <th>Outcome State</th>
+              <th>Outcome</th>
+              <th>Council</th>
             </tr>
           </thead>
           <tbody>
@@ -2697,6 +2752,27 @@ function Dataset() {
                 <td className="num" style={{ color: 'var(--green2)' }}>{inr(r.target_price)}</td>
                 <td className="num" style={{ color: '#fb7185' }}>{inr(r.stoploss_price)}</td>
                 <td><span className={`pill ${r.outcome_status === 'HIT' ? 'pill-hit' : r.outcome_status === 'MISS' ? 'pill-miss' : 'pill-open'}`}>{r.outcome_status}</span></td>
+                <td>
+                  {onAuditInCouncil && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ padding: '4px 9px', fontSize: 11, color: '#38bdf8', borderColor: 'rgba(56,189,248,0.35)' }}
+                      onClick={() =>
+                        onAuditInCouncil({
+                          ticker: r.ticker,
+                          action: r.action,
+                          entry_price: r.entry_price,
+                          target_price: r.target_price,
+                          stoploss_price: r.stoploss_price,
+                          creator_name: r.creator_name,
+                        })
+                      }
+                    >
+                      <Activity size={11} /> Audit
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -2720,7 +2796,7 @@ function How({ startTour }) {
     { num: '02', title: 'NLP Extraction & Audio Timestamping', desc: 'Using specialized financial NLP, recommendations are resolved to stock symbol, action (BUY/SELL), entry price, target price, and stop-loss with exact millisecond video timestamps.' },
     { num: '03', title: 'Tick-by-Tick Exchange Backtesting', desc: 'Each call is replayed against the NSE historical and real-time tick tape. We verify whether the equity reached target or stop-loss first, recording maximum drawdown.' },
     { num: '04', title: 'Empirical Advisor Scoring & Leaderboards', desc: 'Influencers are ranked on verifiable win rate, Sharpe contribution, and risk control. SEBI registration is verified against national securities databases.' },
-    { num: '05', title: 'Bayesian Conviction Gating Engine', desc: 'New recommendations pass through an XGBoost conviction model that filters out low-probability noise, lifting empirical win rates from ~40% to &gt;75%.' }
+    { num: '05', title: 'Bayesian Conviction Gating Engine', desc: 'New recommendations pass through an XGBoost conviction model that filters out low-probability noise, lifting empirical win rates from ~40% to >75%.' }
   ];
 
   return (
@@ -3031,9 +3107,9 @@ export default function MarketProbeApp() {
               className={MORE_TABS.some((m) => m.id === tab) ? 'active' : ''}
               onClick={() => setMoreMenuOpen((prev) => !prev)}
             >
-              <Layers size={15} />
-              <span>More Tools</span>
-              <ChevronDown size={13} />
+              <Layers size={14} />
+              <span>More</span>
+              <ChevronDown size={12} />
             </button>
 
             {moreMenuOpen && (
@@ -3085,20 +3161,18 @@ export default function MarketProbeApp() {
           onClick={() => setCopilotOpen(true)}
           title="Open FinBot AI Copilot (Cmd+K)"
           style={{
-            background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(14, 165, 233, 0.25) 100%)',
-            border: '1px solid rgba(56, 189, 248, 0.4)',
+            background: 'rgba(56, 189, 248, 0.12)',
+            border: '1px solid rgba(56, 189, 248, 0.35)',
             color: '#38bdf8',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
+            padding: '6px 10px',
             fontSize: '12px',
             fontWeight: 600,
-            cursor: 'pointer'
+            flexShrink: 0,
           }}
         >
-          <Sparkles size={14} />
+          <Sparkles size={13} />
           <span>Copilot</span>
-          <kbd style={{ fontSize: '10px', background: 'rgba(0, 0, 0, 0.3)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '3px', padding: '1px 5px', color: '#94a3b8' }}>⌘K</kbd>
+          <kbd style={{ fontSize: '9.5px', background: 'rgba(0, 0, 0, 0.3)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '3px', padding: '1px 4px', color: '#94a3b8' }}>⌘K</kbd>
         </button>
 
         <div className="user-chip">
@@ -3109,8 +3183,8 @@ export default function MarketProbeApp() {
           </div>
         </div>
 
-        <button className="btn btn-ghost" onClick={logout} title="Log Out of Session">
-          <LogOut size={15} />
+        <button className="btn btn-ghost" style={{ padding: '6px 9px', flexShrink: 0 }} onClick={logout} title="Log Out of Session">
+          <LogOut size={14} />
         </button>
       </header>
 
@@ -3126,21 +3200,21 @@ export default function MarketProbeApp() {
             onAuditInCouncil={openInQuantCouncil}
           />
         )}
-        {tab === 'TERMINAL' && (
+        <div style={{ display: tab === 'TERMINAL' ? 'block' : 'none' }}>
           <AIHedgeFundTerminal
             selectedSetup={selectedAuditSetup}
             onNavigateTab={setTab}
           />
-        )}
+        </div>
         {tab === 'WATCHLIST' && <WatchlistComponent />}
-        {tab === 'ALERTS' && <AlphaAlerts />}
+        {tab === 'ALERTS' && <AlphaAlerts onAuditInCouncil={openInQuantCouncil} />}
         {tab === 'STOCKS' && <StocksRadar />}
         {tab === 'RANKINGS' && <Rankings />}
         {tab === 'SIMULATOR' && <Simulator />}
-        {tab === 'FINBOT' && <FinBotDesk />}
+        {tab === 'FINBOT' && <FinBotDesk onNavigateTab={setTab} />}
         {tab === 'EVAL' && <AIEvalHarnessView />}
-        {tab === 'CHECKER' && <Checker />}
-        {tab === 'DATASET' && <Dataset />}
+        {tab === 'CHECKER' && <Checker onAuditInCouncil={openInQuantCouncil} />}
+        {tab === 'DATASET' && <Dataset onAuditInCouncil={openInQuantCouncil} />}
         {tab === 'BILLING' && <BillingComponent user={user} onUserUpdate={(u) => setUser(u)} />}
         {tab === 'HOW' && <How startTour={startTour} />}
       </main>
