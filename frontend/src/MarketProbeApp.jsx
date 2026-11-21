@@ -40,7 +40,8 @@ const MORE_TABS = [
   { id: 'CHECKER', label: 'Fact-Check NLP', icon: CheckCircle2 },
   { id: 'EVAL', label: 'AI Evaluation', icon: ShieldCheck },
   { id: 'BILLING', label: 'Plans & Billing', icon: CreditCard },
-  { id: 'HOW', label: 'How it works', icon: BookOpen },
+  { id: 'HOW', label: 'How It Works (v1.0)', icon: BookOpen },
+  { id: 'OVERVIEW', label: 'Opening Page (v1.0)', icon: Globe },
 ];
 
 const TABS = [...PRIMARY_TABS, ...MORE_TABS];
@@ -62,18 +63,14 @@ const TOUR_STEPS = [
 
 /* ----------------------------------- APP ---------------------------------- */
 export default function MarketProbeApp() {
-  const [user, setUser] = useState(() => { 
-    try { 
+  const [user, setUser] = useState(() => {
+    try {
       const u = JSON.parse(localStorage.getItem('mp_user'));
       if (u) return u;
     } catch { }
-    // Default directly to authorized Institutional Trader so the app opens immediately
-    const defaultUser = { id: 'usr_demo', email: 'demo@marketprobe.in', name: 'Institutional Quant', role: 'pro_trader', tier: 'enterprise' };
-    localStorage.setItem('mp_user', JSON.stringify(defaultUser));
-    localStorage.setItem('mp_token', 'demo_jwt_token');
-    return defaultUser;
+    return null; // First-time visitors open cleanly on the MarketProbe v1.0 Opening Page
   });
-  const [tab, setTab] = useState('TERMINAL'); // Open directly on the Multi-Agent Council Terminal
+  const [tab, setTab] = useState('TERMINAL'); // Inside workspace, default directly to 5-Agent Quant Council
   const [selectedAuditSetup, setSelectedAuditSetup] = useState(null);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [tour, setTour] = useState(false);
@@ -154,59 +151,61 @@ export default function MarketProbeApp() {
     return () => { active = false; clearInterval(iv); };
   }, [user]);
 
-  const onAuth = (token, u, isNew) => {
+  const onAuth = (token, u, isNew, targetTab = 'TERMINAL') => {
     localStorage.setItem('mp_token', token);
     localStorage.setItem('mp_user', JSON.stringify(u));
     setUser(u);
     setAuthModal({ open: false, mode: 'login' });
+    setTab(targetTab);
+    if (isNew && !localStorage.getItem(`mp_tour_done_${u.email}`)) setWelcome(false);
+  };
+
+  const logout = () => {
+    localStorage.removeItem('mp_token');
+    localStorage.removeItem('mp_user');
+    setUser(null);
+    setFeed(null);
+  };
+
+  const endTour = () => {
+    setTour(false);
+    if (user) localStorage.setItem(`mp_tour_done_${user.email}`, '1');
+  };
+
+  const startTour = () => {
+    setWelcome(false);
     setTab('FEED');
-    if (isNew || !localStorage.getItem(`mp_tour_done_${u.email}`)) setWelcome(true);
+    setTimeout(() => setTour(true), 100);
   };
 
-  const logout = () => { 
-    localStorage.removeItem('mp_token'); 
-    localStorage.removeItem('mp_user'); 
-    setUser(null); 
-    setFeed(null); 
-  };
-
-  const endTour = () => { 
-    setTour(false); 
-    if (user) localStorage.setItem(`mp_tour_done_${user.email}`, '1'); 
-  };
-
-  const startTour = () => { 
-    setWelcome(false); 
-    setTab('FEED'); 
-    setTimeout(() => setTour(true), 100); 
-  };
-
-  const launchDemoUser = async () => {
+  const launchDemoUser = async (targetTab = 'TERMINAL') => {
+    const dest = typeof targetTab === 'string' ? targetTab : 'TERMINAL';
     try {
       const data = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email: 'demo@marketprobe.in', password: 'demo123' }) });
-      onAuth(data.access_token, data.user, true);
+      onAuth(data.access_token, data.user, false, dest);
     } catch {
-      // Fallback local demo profile
-      const demoU = { id: 'usr_demo', email: 'demo@marketprobe.in', name: 'Quant Trader (Demo)', role: 'pro_trader', tier: 'pro' };
-      onAuth('demo_jwt_token', demoU, true);
+      const demoU = { id: 'usr_demo', email: 'demo@marketprobe.in', name: 'Institutional Quant', role: 'pro_trader', tier: 'enterprise' };
+      onAuth('demo_jwt_token', demoU, false, dest);
     }
   };
 
-  if (!user) {
+  if (!user || tab === 'OVERVIEW') {
     return (
       <>
-        <LandingPage 
-          onOpenAuth={(mode) => setAuthModal({ open: true, mode })} 
-          onLaunchDemo={launchDemoUser} 
-          theme={theme}
-          setTheme={setTheme}
-          glow={glow}
-          setGlow={setGlow}
+        <LandingPage
+          onOpenAuth={(mode) => setAuthModal({ open: true, mode })}
+          onLaunchDemo={(dest) => {
+            if (user) {
+              setTab(typeof dest === 'string' ? dest : 'TERMINAL');
+            } else {
+              launchDemoUser(dest);
+            }
+          }}
         />
-        <OAuthModal 
-          open={authModal.open} 
-          onClose={() => setAuthModal({ ...authModal, open: false })} 
-          onAuth={onAuth} 
+        <OAuthModal
+          open={authModal.open}
+          onClose={() => setAuthModal({ ...authModal, open: false })}
+          onAuth={(tok, u, isNew) => onAuth(tok, u, isNew, 'TERMINAL')}
         />
       </>
     );
@@ -221,7 +220,7 @@ export default function MarketProbeApp() {
           <div className="mp-logo-badge"><Activity size={20} /></div>
           <div>
             MarketProbe<span style={{ color: 'var(--green2)' }}>.</span>
-            <small>QUANT COUNCIL</small>
+            <small>QUANT COUNCIL · v1.0</small>
           </div>
         </div>
 

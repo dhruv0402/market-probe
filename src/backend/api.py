@@ -76,9 +76,9 @@ async def _lifespan(application: FastAPI):
         bg_task.cancel()
 
 app = FastAPI(
-    title="MarketProbe Empirical Auditing & Quant Analytics API",
-    description="Empirical finfluencer performance verification, forensic provenance auditing, and quantitative risk simulation (Non-Advisory).",
-    version="4.1.0",
+    title="MarketProbe v1.0 — Empirical Auditing & Multi-Agent Quant Intelligence API",
+    description="Empirical finfluencer performance verification, SEC/NSE filings debate, insider cluster radar, earnings call vocal forensics, and quantitative risk simulation (SEBI Non-Advisory).",
+    version="1.0.0",
     lifespan=_lifespan,
 )
 
@@ -580,7 +580,7 @@ def health_check():
     return {
         "status": "healthy",
         "service": "MarketProbe High-Throughput Auditing Engine",
-        "version": "4.1.0",
+        "version": "1.0.0",
         "database": "connected" if os.path.exists(DB_PATH) else "not_found",
         "database_backend": get_database_backend_info(),
         "market_data_connector": get_active_broker_connector(),

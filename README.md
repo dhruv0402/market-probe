@@ -1,94 +1,63 @@
-# MarketProbe: Multi-Modal Financial Recommendation Auditor, Alpha Gating Engine & Real-Time NSE Fact-Checker
+# MarketProbe v1.0 — Forensic Equity Auditing & Multi-Agent Quant Terminal
 
-MarketProbe is an enterprise-grade financial intelligence and regulatory compliance system designed to ingest, transcribe, audit, and fact-check stock recommendations from financial influencers ("finfluencers"), institutional broker desks, and social media channels (YouTube, Twitter/X, Telegram, Institutional PDFs).
+**MarketProbe v1.0** is an empirical performance-auditing, primary-source verification, and multi-agent quantitative forensics terminal spanning **NSE (India)** and **SEC EDGAR (US / Indian ADRs)**.
+
+> **SEBI Non-Advisory Disclosure:** MarketProbe is strictly an empirical performance-auditing, primary-source verification, and quantitative simulation platform. It is **not** a SEBI-registered Investment Adviser (IA) or Research Analyst (RA) and does not provide personalized buy/sell advice.
 
 ---
 
-## 🚀 Quickstart: Running on Custom / Different Ports
+## Core v1.0 Architecture & Modules
 
-### Default Run (Backend: `8080`, Frontend: `5174`):
+1. **5-Agent Communicating Quant Council (`3-Round Redis / In-Memory Bus`)**
+   - **Agent 1 (Perception & RAG):** 544-vector FAISS transcript grounding, SEBI RA registry check, crowd consensus, and live Insider Flow / Smart-Money Divergence telemetry.
+   - **Agent 2 (Forensic Empirical Bayes):** Shrinkage-adjusted creator win rates, Wilson 95% confidence intervals, and Brier calibration haircuts.
+   - **Agent 3 (Stochastic Quant Math):** 1,000-path Merton Jump-Diffusion first-passage barrier simulation with Common Random Numbers determinism and counterfactual target/stop-loss restructuring.
+   - **Agent 4 (Risk, Tax & Memory):** 95% CVaR tail risk, Half-Kelly sizing, Indian Section 111A/112A capital gains modeling, and persistent user risk profile memory.
+   - **Agent 5 (CIO Meta-Governor):** Synthesizes 3-round agent consensus and calibrated risk scenarios.
+2. **Bull vs. Bear AI Filings Debate + CIO Judge**
+   - Live SEC EDGAR `10-K` / `20-F` XBRL CompanyFacts (`us-gaap` & `ifrs-full` latest fiscal year) + NSE Annual Report PDF upload.
+   - Bull Counsel → Bear Counsel cross-examination → Bull Rebuttal → CIO Judge rubric scorecard (`Evidence Grounding`, `Financial Rigor`, `Risk Realism`) with 1-click push into the 5-Agent Council.
+3. **Insider Cluster Buy Radar & Smart-Money Divergence**
+   - Live SEC Form 4 XML ingestion strictly filtering to open-market buys (`P`) and sales (`S`) (rejecting RSU grants, tax withholdings, and option exercises) + official **NSE SEBI PIT CSV importer**.
+   - Cross-joins multi-executive cluster buys/sales against MarketProbe's verified call ledger (`SMART_MONEY_CONFIRMED`, `FINFLUENCER_TRAP`, `STEALTH_ACCUMULATION`).
+4. **Earnings Call Vocal Stress & Executive Hedging Lab**
+   - Frame-level acoustic biomarker extraction (`ffmpeg` + `librosa`: pitch `F0` variance, vocal jitter, RMS tremor, hesitation pause density) comparing **Analyst Q&A vs. Prepared Remarks** baseline.
+   - Gemini native audio transcription, financial sentiment polarity drop, corporate hedging idiom extraction, and non-blocking `T+1`/`T+5` post-call stock drift tracking.
+5. **Empirical Track-Record Ledger, FinBot Copilot & Live NSE Sector Breadth**
+   - **`2,281` audited records** (`97.4%` Verified Primary, `0` synthetic rows, `0` hygiene anomalies) with immutable stated entry prices and **SHA-256 proof receipts**.
+   - Live official **NSE `allIndices`** sectoral breadth + INDIA VIX, plus plug-and-play **Dhan HQ v2** and **Zerodha Kite Connect v3** live quote connectors.
+   - FinBot Quant Copilot (`⌘K`), Markowitz SLSQP Efficient Frontier, Section 112A Tax-Loss Harvesting Lab, Portfolio Replay Simulator, and sub-2ms NLP Fact-Checker.
+
+---
+
+## Quickstart (Unified Single Port `8080`)
+
 ```bash
-cd /Users/dhruvgourisaria/marketprobe
-./start.sh
+cp .env.example .env
+# Add your GEMINI_API_KEY and MARKETPROBE_SECRET_KEY in .env
+
+pip install -r requirements.txt
+cd frontend && npm ci && npm run build && cd ..
+
+python3 -m uvicorn src.backend.api:app --host 0.0.0.0 --port 8080
 ```
 
-### Run on Any Specific Ports of Your Choice:
-```bash
-# Syntax: ./start.sh <backend_port> <frontend_port>
-./start.sh 8001 3000
-# or
-./start.sh 9000 8081
-```
-
-This automatically launches:
-* **FastAPI Backend**: `http://localhost:<backend_port>` (API Docs: `http://localhost:<backend_port>/docs`)
-* **React Frontend**: `http://localhost:<frontend_port>`
+Open **http://localhost:8080** (API docs at `http://localhost:8080/docs`).
 
 ---
 
-## 🌟 Key Architecture & Capabilities
+## Testing, CI/CD & Production Deployment
 
-1. **Precision Financial NER & Fast-Path Fact-Checking**:
-   - Sub-2ms deterministic regex fast-path and NLP entity extraction ($537\times$ speedup) extracting Action (`BUY`/`SELL`), Target, Stop Loss, and NSE Tickers.
-2. **Bayesian ML Alpha Gating Engine (XGBoost)**:
-   - Evaluates risk-to-reward ratios, historical creator win rates with empirical Bayes shrinkage, and market volatility buffers.
-   - **Boosts realized trade win rate from $40.28\%$ (unfiltered) to $75.00\%$ ($\ge 60\%$ conviction filter).**
-3. **High-Throughput Vectorized Portfolio Simulator**:
-   - Sub-10ms vectorized Monte Carlo portfolio simulation and trade sandbox.
-4. **Native Real-Time WebSockets Engine**:
-   - `/ws/live-quotes` streaming real-time NSE market ticks with client fallback.
-5. **Interactive Web Workstation**:
-   - **Dataset Viewer (995 Audited Records)** with live filtering and 1-click CSV download.
-   - **Live Audio Fact-Checker & Transcriber**.
-   - **Picture-in-Picture Floating Miniplayer** with instant video timestamp seeking.
-   - **Custom Trade Sandbox & Interactive Ledger**.
-
----
-
-## 🧪 Running End-to-End Automated Tests
-```bash
-python3 test_e2e.py
-```
-
----
-
-## 📁 Repository Structure
-
-```
-marketprobe/
-├── start.sh                       # 1-Click launcher supporting custom ports
-├── test_e2e.py                    # Automated end-to-end test suite
-├── requirements.txt               # Python backend dependencies
-├── data/
-│   ├── marketprobe.db             # Relational SQLite database (995 records, 51 creators, 2559 NSE tickers)
-│   ├── marketprobe_recommendations.csv
-│   ├── marketprobe_influencers.csv
-│   ├── marketprobe_raw_content.csv
-│   └── xgb_model.pkl              # Serialized production XGBoost model
-├── src/
-│   ├── backend/
-│   │   └── api.py                 # FastAPI server (WebSockets, REST API, Conviction Engine)
-│   ├── backtest/
-│   │   └── engine.py              # Historical backtesting engine
-│   ├── nlp/
-│   │   ├── precision_extractor.py # Financial NER extraction logic
-│   │   └── index_universe.py      # NSE sector & benchmark index mappings
-│   ├── scraping/
-│   │   ├── multi_platform_collector.py
-│   │   ├── bulk_scale_ingestion.py
-│   │   └── institutional_news_scraper.py
-│   └── models/
-│       └── train_realistic_ml.py  # Model training pipeline
-├── frontend/
-│   ├── package.json
-│   ├── vite.config.js
-│   └── src/
-│       ├── App.jsx
-│       ├── MarketProbeApp.jsx     # Master UI Component (Dynamic backend port detection)
-│       └── main.jsx
-└── docs/
-    ├── EVALUATION_METRICS.md      # Full 5-fold CV, holdout test metrics, SHAP analysis
-    ├── RESEARCH_PAPER.md          # Full academic research paper
-    ├── DATASET_REFERENCE.md       # Complete dataset reference guide
-    └── VERIFICATION_WALKTHROUGH.md# Testing & verification guide
-```
+- **Automated Test Suite (`29` tests):**
+  ```bash
+  PYTHONPATH=. pytest tests/ -v
+  ```
+- **4-Stage GitHub Actions CI/CD (`.github/workflows/ci.yml`):**
+  1. Backend `pytest` + automated `hygiene_supervisor` gate (`0` anomalies, `0` synthetic rows)
+  2. React/Vite production SPA build
+  3. Multi-stage `Dockerfile` build verification (`node:20-alpine` + `python:3.11-slim` + `ffmpeg` + `libsndfile1`)
+  4. CI-gated Render deploy hook (`RENDER_DEPLOY_HOOK_URL`) + post-deploy `/api/health` verification
+- **Daily Market-Close Data Sync (`.github/workflows/daily-crawler.yml`):**
+  - Runs Mon–Fri at 3:45 PM IST (`10:15 UTC`) via `src/ingestion/scheduled_daily_sync.py`.
+- **Cloud Blueprint (`render.yaml`):**
+  - Provisions Docker web service (`:8080`), managed **PostgreSQL** (`DATABASE_URL` via `src/backend/db_adapter.py`), and managed **Redis** (`REDIS_URL`).

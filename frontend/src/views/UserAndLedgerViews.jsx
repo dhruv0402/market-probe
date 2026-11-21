@@ -603,20 +603,21 @@ export function Dataset({ onAuditInCouncil }) {
 /* ------------------------------- HOW IT WORKS ----------------------------- */
 export function How({ startTour }) {
   const steps = [
-    { num: '01', title: 'Automated Multi-Channel Ingestion', desc: 'Our background scrapers continuously monitor YouTube financial channels, Twitter financial accounts, Telegram desks, and broker reports, indexing raw media and quotes.' },
-    { num: '02', title: 'NLP Extraction & Audio Timestamping', desc: 'Using specialized financial NLP, recommendations are resolved to stock symbol, action (BUY/SELL), entry price, target price, and stop-loss with exact millisecond video timestamps.' },
-    { num: '03', title: 'Tick-by-Tick Exchange Backtesting', desc: 'Each call is replayed against the NSE historical and real-time tick tape. We verify whether the equity reached target or stop-loss first, recording maximum drawdown.' },
-    { num: '04', title: 'Empirical Advisor Scoring & Leaderboards', desc: 'Influencers are ranked on verifiable win rate, Sharpe contribution, and risk control. SEBI registration is verified against national securities databases.' },
-    { num: '05', title: 'Bayesian Conviction Gating Engine', desc: 'New recommendations pass through an XGBoost conviction model that filters out low-probability noise, lifting empirical win rates from ~40% to >75%.' }
+    { num: '01', title: 'Primary-Source Ledger & SHA-256 Proof Receipts', desc: 'MarketProbe audits 2,281+ equity recommendations with immutable stated entry prices, timestamped source links, automated hygiene sweeps (0 synthetic/template anomalies), and tamper-evident SHA-256 proof hashes.' },
+    { num: '02', title: '5-Agent Communicating Quant Council (3-Round Bus)', desc: 'Perception/RAG (FAISS + live insider telemetry), Forensic Empirical Bayes, 1,000-path Merton Jump-Diffusion Quant Math, Risk/Tax/Memory (CVaR, Half-Kelly, Section 111A/112A), and the CIO Meta-Governor cross-examine every setup and compute counterfactual risk levels.' },
+    { num: '03', title: 'Bull vs. Bear AI Filings Debate + CIO Judge', desc: 'Opposing AI counsels debate live SEC EDGAR 10-K/20-F XBRL financials (us-gaap & ifrs-full) or uploaded NSE Annual Report PDFs, scored on Evidence Grounding, Financial Rigor, and Risk Realism.' },
+    { num: '04', title: 'Insider Cluster Buy Radar & Finfluencer Divergence', desc: 'Parses live SEC Form 4 XML (strictly open-market Code P/S) and official NSE SEBI PIT CSV exports, cross-joining C-suite buys/sells against creator consensus to flag Smart-Money Confirmations and Finfluencer Divergence Traps.' },
+    { num: '05', title: 'Earnings Call Vocal Stress & Executive Hedging Lab', desc: 'Runs librosa frame-level acoustic forensics (F0 pitch variance, vocal jitter, pause hesitation shift) normalized against each speaker’s Prepared Remarks baseline, paired with Gemini audio transcription, FinBERT/hedging density, and T+1/T+5 drift.' },
+    { num: '06', title: 'Empirical Track-Record Ledger & SEBI Non-Advisory Standard', desc: 'Creators and brokerage desks are ranked via Empirical Bayes shrinkage with Wilson 95% confidence intervals — strictly framed as empirical auditing and quantitative simulation, never personalized buy/sell advice.' }
   ];
 
   return (
     <div style={{ width: '100%' }}>
       <div className="page-head">
         <div>
-          <div className="eyebrow"><BookOpen size={13} /> Infrastructure Architecture</div>
-          <h1 className="mp-h1">How MarketProbe Operates</h1>
-          <p className="mp-sub">From raw unstructured financial media to mathematical conviction scoring.</p>
+          <div className="eyebrow"><BookOpen size={13} /> MarketProbe v1.0 Architecture</div>
+          <h1 className="mp-h1">How MarketProbe v1.0 Operates</h1>
+          <p className="mp-sub">From unstructured financial media, regulatory filings, insider XML, and earnings audio to reproducible quantitative proof.</p>
         </div>
       </div>
 
