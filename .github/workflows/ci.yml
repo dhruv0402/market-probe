@@ -36,7 +36,6 @@ jobs:
       - name: Run full pytest regression suite
         env:
           MARKETPROBE_SECRET_KEY: ci-ephemeral-test-secret-not-for-prod
-          MARKETPROBE_ALLOW_DEMO_TOKEN: "true"
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: PYTHONPATH=. pytest tests/ -v
 

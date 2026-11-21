@@ -63,13 +63,8 @@ const TOUR_STEPS = [
 
 /* ----------------------------------- APP ---------------------------------- */
 export default function MarketProbeApp() {
-  const [user, setUser] = useState(() => {
-    try {
-      const u = JSON.parse(localStorage.getItem('mp_user'));
-      if (u) return u;
-    } catch { }
-    return null; // First-time visitors open cleanly on the MarketProbe v1.0 Opening Page
-  });
+  const [user, setUser] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true);
   const [tab, setTab] = useState('TERMINAL'); // Inside workspace, default directly to 5-Agent Quant Council
   const [selectedAuditSetup, setSelectedAuditSetup] = useState(null);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -116,24 +111,33 @@ export default function MarketProbeApp() {
     document.documentElement.setAttribute('data-glow', glow);
   }, [glow]);
 
-  // Validate active JWT session on startup
+  // Strictly validate stored JWT against real DB session on startup (purges legacy demo tokens!)
   useEffect(() => {
     const token = localStorage.getItem('mp_token');
-    if (token) {
-      api('/auth/me')
-        .then((data) => {
-          if (data && data.user) {
-            setUser(data.user);
-            localStorage.setItem('mp_user', JSON.stringify(data.user));
-          }
-        })
-        .catch(() => {
-          // Token expired or invalid, log out cleanly
+    if (!token || token === 'demo_jwt_token' || token.split('.').length !== 3) {
+      localStorage.removeItem('mp_token');
+      localStorage.removeItem('mp_user');
+      setUser(null);
+      setAuthChecking(false);
+      return;
+    }
+    api('/auth/me')
+      .then((data) => {
+        if (data && data.status === 'authenticated' && data.user && data.user.role !== 'anonymous') {
+          setUser(data.user);
+          localStorage.setItem('mp_user', JSON.stringify(data.user));
+        } else {
           localStorage.removeItem('mp_token');
           localStorage.removeItem('mp_user');
           setUser(null);
-        });
-    }
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem('mp_token');
+        localStorage.removeItem('mp_user');
+        setUser(null);
+      })
+      .finally(() => setAuthChecking(false));
   }, []);
 
   useEffect(() => {
@@ -160,11 +164,17 @@ export default function MarketProbeApp() {
     if (isNew && !localStorage.getItem(`mp_tour_done_${u.email}`)) setWelcome(false);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await api('/auth/logout', { method: 'POST' });
+    } catch {
+      // Clear local session even if server already expired the token
+    }
     localStorage.removeItem('mp_token');
     localStorage.removeItem('mp_user');
     setUser(null);
     setFeed(null);
+    setTab('TERMINAL');
   };
 
   const endTour = () => {
@@ -178,32 +188,26 @@ export default function MarketProbeApp() {
     setTimeout(() => setTour(true), 100);
   };
 
-  const launchDemoUser = async (targetTab = 'TERMINAL') => {
-    const dest = typeof targetTab === 'string' ? targetTab : 'TERMINAL';
-    try {
-      const data = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email: 'demo@marketprobe.in', password: 'demo123' }) });
-      onAuth(data.access_token, data.user, false, dest);
-    } catch {
-      const demoU = { id: 'usr_demo', email: 'demo@marketprobe.in', name: 'Institutional Quant', role: 'pro_trader', tier: 'enterprise' };
-      onAuth('demo_jwt_token', demoU, false, dest);
-    }
-  };
+  if (authChecking) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#06090e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontFamily: 'var(--mono)', fontSize: 13 }}>
+        <Loader2 size={18} className="spin" style={{ marginRight: 10, color: '#10b981' }} />
+        Verifying session...
+      </div>
+    );
+  }
 
   if (!user || tab === 'OVERVIEW') {
     return (
       <>
         <LandingPage
+          isAuthenticated={Boolean(user)}
           onOpenAuth={(mode) => setAuthModal({ open: true, mode })}
-          onLaunchDemo={(dest) => {
-            if (user) {
-              setTab(typeof dest === 'string' ? dest : 'TERMINAL');
-            } else {
-              launchDemoUser(dest);
-            }
-          }}
+          onEnterTerminal={(dest) => setTab(typeof dest === 'string' ? dest : 'TERMINAL')}
         />
         <OAuthModal
           open={authModal.open}
+          mode={authModal.mode}
           onClose={() => setAuthModal({ ...authModal, open: false })}
           onAuth={(tok, u, isNew) => onAuth(tok, u, isNew, 'TERMINAL')}
         />

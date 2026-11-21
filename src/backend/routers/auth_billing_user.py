@@ -5,6 +5,8 @@ SaaS Authentication, Razorpay/Stripe Billing, User Watchlists, Saved Calls & Ale
 import hashlib
 import hmac
 import os
+import re
+import secrets
 import sqlite3
 import time
 from datetime import datetime
@@ -15,22 +17,24 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from src.backend.security import (
-    USER_DB,
     create_jwt_token,
-    get_current_user_optional,
     get_user_alert_config,
     get_user_by_email,
     get_user_saved_calls,
     get_user_watchlist,
     hash_password,
     record_subscription,
+    record_user_login,
     require_auth,
+    revoke_session,
     save_user,
     toggle_saved_call,
     toggle_watchlist_item,
     update_user_alert_config,
     verify_password,
 )
+
+EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class LoginRequest(BaseModel):
@@ -118,34 +122,20 @@ def create_auth_billing_router(
 
     @router.post("/api/auth/login")
     def login_user(req: LoginRequest):
-        email_clean = req.email.strip().lower()
-        user = get_user_by_email(email_clean) or USER_DB.get(email_clean)
+        email_clean = (req.email or "").strip().lower()
+        if not EMAIL_REGEX.match(email_clean) or not req.password:
+            raise HTTPException(status_code=400, detail="Please enter a valid email and password.")
 
-        if email_clean == "demo@marketprobe.in":
-            if not user:
-                user = {
-                    "id": "usr_demo_001",
-                    "email": "demo@marketprobe.in",
-                    "name": "MarketProbe Demo Trader",
-                    "password_hash": hash_password("demo123"),
-                    "role": "pro_trader",
-                    "tier": "pro",
-                    "provider": "email",
-                    "api_key": "mp_live_demo_992837418293847",
-                }
-                save_user(user)
-            if req.password != "demo123" and not verify_password(req.password, user.get("password_hash", "")):
-                raise HTTPException(status_code=401, detail="Invalid credentials for demo account.")
-        else:
-            if not user:
-                raise HTTPException(status_code=401, detail="No account found with this email. Please sign up first.")
-            if not verify_password(req.password, user.get("password_hash", "")):
-                raise HTTPException(status_code=401, detail="Incorrect password. Please verify your credentials.")
+        user = get_user_by_email(email_clean)
+        if not user or not verify_password(req.password, user.get("password_hash", "")):
+            raise HTTPException(status_code=401, detail="Invalid email or password.")
 
+        record_user_login(user["id"])
         token = create_jwt_token(
             {"sub": user["id"], "email": user["email"], "role": user["role"], "tier": user["tier"]}
         )
         return {
+            "status": "authenticated",
             "access_token": token,
             "token_type": "bearer",
             "user": {
@@ -160,27 +150,43 @@ def create_auth_billing_router(
 
     @router.post("/api/auth/register")
     def register_user(req: RegisterRequest):
-        existing = get_user_by_email(req.email) or USER_DB.get(req.email)
+        email_clean = (req.email or "").strip().lower()
+        name_clean = (req.name or "").strip()
+        password = req.password or ""
+
+        if len(name_clean) < 2:
+            raise HTTPException(status_code=400, detail="Please enter your full name (at least 2 characters).")
+        if not EMAIL_REGEX.match(email_clean):
+            raise HTTPException(status_code=400, detail="Please enter a valid email address.")
+        if len(password) < 8 or not re.search(r"[A-Za-z]", password) or not re.search(r"\d", password):
+            raise HTTPException(
+                status_code=400,
+                detail="Password must be at least 8 characters and include both letters and numbers.",
+            )
+
+        existing = get_user_by_email(email_clean)
         if existing:
-            raise HTTPException(status_code=400, detail="Account with this email already exists.")
+            raise HTTPException(status_code=409, detail="An account with this email already exists. Please sign in.")
+
         user = {
-            "id": f"usr_{int(time.time())}",
-            "email": req.email.lower(),
-            "name": req.name,
-            "password_hash": hash_password(req.password),
+            "id": f"usr_{secrets.token_hex(8)}",
+            "email": email_clean,
+            "name": name_clean,
+            "password_hash": hash_password(password),
             "role": "pro_trader",
-            "tier": "pro",
+            "tier": "free",
             "provider": "email",
-            "api_key": f"mp_live_{abs(hash(req.email))}",
+            "api_key": f"mp_live_{secrets.token_hex(16)}",
         }
-        USER_DB[req.email] = user
         save_user(user)
+        record_user_login(user["id"])
         token = create_jwt_token(
             {"sub": user["id"], "email": user["email"], "role": user["role"], "tier": user["tier"]}
         )
         return {
-            "status": "success",
+            "status": "authenticated",
             "access_token": token,
+            "token_type": "bearer",
             "user": {
                 "id": user["id"],
                 "email": user["email"],
@@ -191,61 +197,32 @@ def create_auth_billing_router(
             },
         }
 
+    @router.post("/api/auth/logout")
+    def logout_user(user: dict = Depends(require_auth)):
+        jti = user.get("jti")
+        if jti:
+            revoke_session(str(jti))
+        return {"status": "logged_out", "revoked": bool(jti)}
+
     @router.post("/api/auth/oauth")
     def oauth_login(req: OAuthRequest):
-        provider = req.provider.lower()
-        email = (req.email or f"trader_{provider}@marketprobe.finance").lower()
-        name = req.name or f"{provider.capitalize()} Trader"
-
-        user = get_user_by_email(email) or USER_DB.get(email)
-        if not user:
-            user = {
-                "id": f"usr_{provider}_{int(time.time())}",
-                "email": email,
-                "name": name,
-                "password_hash": hash_password(f"oauth_{provider}_{time.time()}"),
-                "role": "pro_trader",
-                "tier": "pro",
-                "provider": provider,
-                "api_key": f"mp_live_{abs(hash(email))}",
-            }
-            USER_DB[email] = user
-            save_user(user)
-        else:
-            user["provider"] = provider
-            if req.name:
-                user["name"] = req.name
-            save_user(user)
-
-        token = create_jwt_token(
-            {
-                "sub": user["id"],
-                "email": user["email"],
-                "role": user["role"],
-                "tier": user["tier"],
-                "provider": provider,
-            }
+        raise HTTPException(
+            status_code=501,
+            detail="External OAuth SSO is not configured on this server. Please sign in or register with email and password.",
         )
+
+    @router.get("/api/auth/me")
+    def get_current_user_profile(user: dict = Depends(require_auth)):
         return {
-            "status": "success",
-            "access_token": token,
-            "token_type": "bearer",
             "user": {
                 "id": user["id"],
                 "email": user["email"],
-                "name": user["name"],
+                "name": user.get("name") or user["email"],
                 "role": user["role"],
                 "tier": user["tier"],
-                "provider": provider,
                 "api_key": user.get("api_key"),
             },
-        }
-
-    @router.get("/api/auth/me")
-    def get_current_user_profile(user: dict = Depends(get_current_user_optional)):
-        return {
-            "user": user,
-            "status": "authenticated" if user["role"] != "anonymous" else "guest",
+            "status": "authenticated",
         }
 
     @router.get("/api/billing/plans")

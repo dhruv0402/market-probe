@@ -9,7 +9,7 @@ import { LiveTape, TerminalStatusIndicator } from './ChromeAndModals.jsx';
 import { api } from '../lib/apiClient.js';
 
 /* ---------------------------------- LANDING PAGE (v1.0) ---------------------------------- */
-export default function LandingPage({ onOpenAuth, onLaunchDemo }) {
+export default function LandingPage({ isAuthenticated = false, onOpenAuth, onEnterTerminal }) {
   const [previewTab, setPreviewTab] = useState('COUNCIL');
   const [health, setHealth] = useState(null);
   const [nseIndices, setNseIndices] = useState(null);
@@ -22,6 +22,14 @@ export default function LandingPage({ onOpenAuth, onLaunchDemo }) {
   const totalRecs = health?.ledger?.total_recommendations ?? 2281;
   const verifiedPct = health?.ledger?.verified_primary_pct ?? 97.4;
   const anomalies = health?.ledger?.anomalies_remaining ?? 0;
+
+  const handleTerminalAction = (destTab = 'TERMINAL') => {
+    if (isAuthenticated && onEnterTerminal) {
+      onEnterTerminal(destTab);
+    } else {
+      onOpenAuth('login');
+    }
+  };
 
   return (
     <div className="landing-shell">
@@ -46,12 +54,20 @@ export default function LandingPage({ onOpenAuth, onLaunchDemo }) {
 
         <div className="landing-actions">
           <TerminalStatusIndicator />
-          <button className="btn btn-ghost" onClick={() => onOpenAuth('login')}>
-            Sign In
-          </button>
-          <button className="btn btn-primary" onClick={() => onLaunchDemo('TERMINAL')}>
-            Launch Terminal <ArrowRight size={15} />
-          </button>
+          {isAuthenticated ? (
+            <button className="btn btn-primary" onClick={() => handleTerminalAction('TERMINAL')}>
+              Return to Terminal <ArrowRight size={15} />
+            </button>
+          ) : (
+            <>
+              <button className="btn btn-ghost" onClick={() => onOpenAuth('login')}>
+                Sign In
+              </button>
+              <button className="btn btn-primary" onClick={() => onOpenAuth('signup')}>
+                Create Account <ArrowRight size={15} />
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -75,20 +91,32 @@ export default function LandingPage({ onOpenAuth, onLaunchDemo }) {
         </p>
 
         <div className="landing-cta-row">
-          <button
-            className="btn btn-primary btn-lg"
-            style={{ padding: '14px 28px', fontSize: 15.5 }}
-            onClick={() => onLaunchDemo('TERMINAL')}
-          >
-            <PlayCircle size={18} /> Launch Live Terminal (v1.0)
-          </button>
-          <button
-            className="btn btn-ghost btn-lg"
-            style={{ padding: '14px 24px', fontSize: 15.5 }}
-            onClick={() => onOpenAuth('signup')}
-          >
-            Create Account <ArrowRight size={16} />
-          </button>
+          {isAuthenticated ? (
+            <button
+              className="btn btn-primary btn-lg"
+              style={{ padding: '14px 28px', fontSize: 15.5 }}
+              onClick={() => handleTerminalAction('TERMINAL')}
+            >
+              <PlayCircle size={18} /> Return to Live Terminal (v1.0)
+            </button>
+          ) : (
+            <>
+              <button
+                className="btn btn-primary btn-lg"
+                style={{ padding: '14px 28px', fontSize: 15.5 }}
+                onClick={() => onOpenAuth('login')}
+              >
+                <Lock size={17} /> Sign In to Terminal (v1.0)
+              </button>
+              <button
+                className="btn btn-ghost btn-lg"
+                style={{ padding: '14px 24px', fontSize: 15.5 }}
+                onClick={() => onOpenAuth('signup')}
+              >
+                Create Account <ArrowRight size={16} />
+              </button>
+            </>
+          )}
         </div>
 
         <div className="landing-trust">
@@ -181,7 +209,7 @@ export default function LandingPage({ onOpenAuth, onLaunchDemo }) {
 
                   <div className="row between" style={{ marginTop: 14 }}>
                     <span style={{ fontSize: 12, color: 'var(--muted)' }}>Common Random Numbers · Deterministic Audit</span>
-                    <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => onLaunchDemo('TERMINAL')}>
+                    <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => handleTerminalAction('TERMINAL')}>
                       Open Council <ArrowRight size={13} />
                     </button>
                   </div>
@@ -276,7 +304,7 @@ export default function LandingPage({ onOpenAuth, onLaunchDemo }) {
                       Strict open-market SEC Form 4 XML (Code P/S only, rejecting RSU grants &amp; exercises) + NSE SEBI PIT CSV importer cross-joined against finfluencer consensus.
                     </p>
                   </div>
-                  <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => onLaunchDemo('INSIDERS')}>
+                  <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => handleTerminalAction('INSIDERS')}>
                     Open Radar <ArrowRight size={13} />
                   </button>
                 </div>
@@ -469,12 +497,20 @@ export default function LandingPage({ onOpenAuth, onLaunchDemo }) {
             Launch the full v1.0 terminal to inspect the 5-Agent Quant Council, Bull vs. Bear Filings Debate, Insider Cluster Radar, and Earnings Vocal Stress Lab.
           </p>
           <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button className="btn btn-primary btn-lg" onClick={() => onLaunchDemo('TERMINAL')}>
-              <PlayCircle size={17} /> Launch Live Terminal (v1.0)
-            </button>
-            <button className="btn btn-ghost btn-lg" onClick={() => onOpenAuth('signup')}>
-              Sign Up / Institutional Login <ArrowRight size={17} />
-            </button>
+            {isAuthenticated ? (
+              <button className="btn btn-primary btn-lg" onClick={() => handleTerminalAction('TERMINAL')}>
+                <PlayCircle size={17} /> Return to Live Terminal (v1.0)
+              </button>
+            ) : (
+              <>
+                <button className="btn btn-primary btn-lg" onClick={() => onOpenAuth('login')}>
+                  <Lock size={17} /> Sign In to Terminal (v1.0)
+                </button>
+                <button className="btn btn-ghost btn-lg" onClick={() => onOpenAuth('signup')}>
+                  Create Free Account <ArrowRight size={17} />
+                </button>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -499,8 +535,8 @@ export default function LandingPage({ onOpenAuth, onLaunchDemo }) {
               <button className="btn btn-ghost" style={{ fontSize: 12.5, padding: '6px 12px' }} onClick={() => onOpenAuth('login')}>
                 Sign In
               </button>
-              <button className="btn btn-primary" style={{ fontSize: 12.5, padding: '6px 12px' }} onClick={() => onLaunchDemo('TERMINAL')}>
-                Open Terminal
+              <button className="btn btn-primary" style={{ fontSize: 12.5, padding: '6px 12px' }} onClick={() => (isAuthenticated ? handleTerminalAction('TERMINAL') : onOpenAuth('signup'))}>
+                {isAuthenticated ? 'Open Terminal' : 'Create Account'}
               </button>
             </div>
           </div>

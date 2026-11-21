@@ -279,3 +279,56 @@ def test_nse_sebi_pit_csv_importer_and_official_indices_endpoint():
     idx_data = idx_resp.json()
     assert idx_data["status"] in ("live", "cached_fallback", "unavailable")
     assert "connector" in idx_data
+
+
+def test_real_database_auth_register_login_me_logout_revocation():
+    # 1. Guest & legacy demo_jwt_token must strictly fail with 401
+    assert client.get("/api/auth/me").status_code == 401
+    assert client.get("/api/auth/me", headers={"Authorization": "Bearer demo_jwt_token"}).status_code == 401
+    assert client.post("/api/auth/oauth", json={"provider": "google", "email": "fake@test.com"}).status_code == 501
+
+    email = "auth_verify_v1@marketprobe.test"
+    # Clean any leftover test user first
+    import sqlite3, os
+    db_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "marketprobe.db")
+    conn = sqlite3.connect(db_file)
+    conn.execute("DELETE FROM user_sessions WHERE user_id IN (SELECT id FROM users WHERE email = ?)", (email,))
+    conn.execute("DELETE FROM users WHERE email = ?", (email,))
+    conn.commit()
+    conn.close()
+
+    # 2. Weak password rejected
+    assert client.post("/api/auth/register", json={"name": "Test User", "email": email, "password": "short"}).status_code == 400
+
+    # 3. Valid registration persists real PBKDF2-SHA256 user & session
+    reg = client.post("/api/auth/register", json={"name": "Auth Verify", "email": email, "password": "StrongPass123"})
+    assert reg.status_code == 200
+    reg_data = reg.json()
+    assert reg_data["status"] == "authenticated"
+    assert reg_data["user"]["email"] == email
+
+    # 4. Duplicate registration rejected with 409
+    assert client.post("/api/auth/register", json={"name": "Auth Verify", "email": email, "password": "StrongPass123"}).status_code == 409
+
+    # 5. Wrong password rejected with 401
+    assert client.post("/api/auth/login", json={"email": email, "password": "WrongPass999"}).status_code == 401
+
+    # 6. Correct password returns verified JWT & /api/auth/me succeeds
+    login = client.post("/api/auth/login", json={"email": email, "password": "StrongPass123"})
+    assert login.status_code == 200
+    token = login.json()["access_token"]
+    me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200
+    assert me.json()["user"]["email"] == email
+
+    # 7. Logout revokes JWT jti in database -> token immediately returns 401!
+    lo = client.post("/api/auth/logout", headers={"Authorization": f"Bearer {token}"})
+    assert lo.status_code == 200 and lo.json()["revoked"] is True
+    assert client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"}).status_code == 401
+
+    # Clean up test user
+    conn = sqlite3.connect(db_file)
+    conn.execute("DELETE FROM user_sessions WHERE user_id IN (SELECT id FROM users WHERE email = ?)", (email,))
+    conn.execute("DELETE FROM users WHERE email = ?", (email,))
+    conn.commit()
+    conn.close()

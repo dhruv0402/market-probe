@@ -1,69 +1,117 @@
 """
-MarketProbe Enterprise Security, JWT Auth & API Key Subsystem
+MarketProbe Enterprise Security, Database-Backed Auth, JWT Session Revocation & RBAC Subsystem.
+
 Implements:
-- JWT Access Token issuance & verification (HS256)
-- PBKDF2 HMAC-SHA256 password hashing with salt
-- Developer API Key hashing & RBAC permissions (free, pro, enterprise)
+- Real SQLite / PostgreSQL `users` & `user_sessions` persistence (zero fake in-memory bypasses)
+- PBKDF2-HMAC-SHA256 password hashing (120,000 iterations + 16-byte cryptographic salt)
+- HS256 JWT access tokens with per-session `jti` persisted in `user_sessions` for true logout revocation
+- Database-verified `X-API-KEY` and Bearer JWT authentication (`require_auth`)
 """
 
-import os
-import hmac
-import hashlib
 import base64
+import hashlib
+import hmac
 import json
+import os
+import secrets
 import time
-import sqlite3
-from typing import Optional, Dict, Any
-from fastapi import HTTPException, Security, Request, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import Any, Dict, Optional
+
+from fastapi import HTTPException, Request, Security, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
 from src.backend.db_adapter import get_app_db_connection
 
 SECRET_KEY = os.environ.get("MARKETPROBE_SECRET_KEY", "marketprobe-local-dev-secret-change-in-prod")
 IS_PRODUCTION = os.environ.get("ENV", "").lower() == "production" or os.environ.get("RENDER", "").lower() == "true"
-ALLOW_DEMO_TOKEN = os.environ.get("MARKETPROBE_ALLOW_DEMO_TOKEN", "false" if IS_PRODUCTION else "true").lower() == "true"
 JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_SECONDS = 86400 * 7 # 7 days
+ACCESS_TOKEN_EXPIRE_SECONDS = 86400 * 7  # 7 days
+PBKDF2_ITERATIONS = 120_000
 
 security_bearer = HTTPBearer(auto_error=False)
 
 # Dual-Engine User Persistence Setup (PostgreSQL via DATABASE_URL in prod, SQLite locally)
-DB_PATH = os.environ.get("MARKETPROBE_DB_PATH", os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "marketprobe.db"))
+DB_PATH = os.environ.get(
+    "MARKETPROBE_DB_PATH",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "marketprobe.db"),
+)
 
-def init_user_db():
+# Kept strictly as empty dict for backwards symbol import compatibility — NEVER used for auth bypass
+USER_DB: Dict[str, Dict[str, Any]] = {}
+
+
+def hash_password(password: str, salt: Optional[str] = None) -> str:
+    if not salt:
+        salt = base64.b64encode(secrets.token_bytes(16)).decode("utf-8")
+    key = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        PBKDF2_ITERATIONS,
+    )
+    return f"pbkdf2$sha256${PBKDF2_ITERATIONS}${salt}${base64.b64encode(key).decode('utf-8')}"
+
+
+def verify_password(plain_password: str, hashed: str) -> bool:
+    try:
+        parts = str(hashed or "").split("$")
+        if len(parts) != 5 or parts[0] != "pbkdf2":
+            return False
+        iterations = int(parts[2])
+        salt = parts[3]
+        expected_key = parts[4]
+        key = hashlib.pbkdf2_hmac(
+            "sha256",
+            plain_password.encode("utf-8"),
+            salt.encode("utf-8"),
+            iterations,
+        )
+        return hmac.compare_digest(base64.b64encode(key).decode("utf-8"), expected_key)
+    except Exception:
+        return False
+
+
+def init_user_db() -> None:
     try:
         conn = get_app_db_connection(DB_PATH)
         cur = conn.cursor()
-        cur.execute('''
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
                 email TEXT UNIQUE NOT NULL,
                 name TEXT,
-                password_hash TEXT,
+                password_hash TEXT NOT NULL,
                 role TEXT DEFAULT 'pro_trader',
-                tier TEXT DEFAULT 'pro',
+                tier TEXT DEFAULT 'free',
                 provider TEXT DEFAULT 'email',
                 api_key TEXT,
+                last_login_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        ''')
-        # Seed default admin & quant accounts if empty
-        cur.execute("SELECT COUNT(*) AS cnt FROM users")
-        row0 = cur.fetchone()
-        existing_cnt = row0["cnt"] if isinstance(row0, dict) else row0[0]
-        if existing_cnt == 0:
-            cur.execute('''
-                INSERT OR IGNORE INTO users (id, email, name, password_hash, role, tier, provider, api_key)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', ("usr_admin_001", "admin@marketprobe.finance", "MarketProbe Admin",
-                  "pbkdf2$sha256$20000$c2FsdF9hZG1pbg==$yDqQ/8G2Q4x9J3q5H0x1F2w8z7Y6U5V4T3S2R1Q0P9O=",
-                  "institutional_admin", "enterprise", "email", "mp_live_adm_9948271049283749"))
-            cur.execute('''
-                INSERT OR IGNORE INTO users (id, email, name, password_hash, role, tier, provider, api_key)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', ("usr_pro_002", "trader@hedgefund.in", "Quantitative Alpha Trader",
-                  "pbkdf2$sha256$20000$c2FsdF90cmFkZXI=$yDqQ/8G2Q4x9J3q5H0x1F2w8z7Y6U5V4T3S2R1Q0P9O=",
-                  "pro_trader", "pro", "email", "mp_live_pro_5519284729103948"))
-        cur.execute('''
+            """
+        )
+        # Ensure last_login_at column exists on migrated SQLite databases
+        if conn.backend == "sqlite":
+            cols = {r["name"] for r in cur.execute("PRAGMA table_info(users)").fetchall()}
+            if "last_login_at" not in cols:
+                cur.execute("ALTER TABLE users ADD COLUMN last_login_at TIMESTAMP")
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                jti TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                expires_at INTEGER NOT NULL,
+                revoked INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_uid ON user_sessions(user_id);")
+
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS user_watchlists (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT NOT NULL,
@@ -74,8 +122,10 @@ def init_user_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, symbol)
             )
-        ''')
-        cur.execute('''
+            """
+        )
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS saved_calls (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT NOT NULL,
@@ -83,8 +133,10 @@ def init_user_db():
                 saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, call_id)
             )
-        ''')
-        cur.execute('''
+            """
+        )
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS subscriptions (
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
@@ -98,24 +150,161 @@ def init_user_db():
                 valid_until TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        ''')
-        cur.execute('''
+            """
+        )
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS user_alert_configs (
                 user_id TEXT PRIMARY KEY,
                 telegram_chat_id TEXT,
                 whatsapp_phone TEXT,
-                telegram_enabled BOOLEAN DEFAULT 0,
-                whatsapp_enabled BOOLEAN DEFAULT 0,
+                telegram_enabled INTEGER DEFAULT 0,
+                whatsapp_enabled INTEGER DEFAULT 0,
                 min_conviction REAL DEFAULT 60.0,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        ''')
+            """
+        )
         conn.commit()
         conn.close()
     except Exception as e:
-        print(f"[SECURITY] Warning initializing user table: {e}")
+        print(f"[SECURITY] Warning initializing user tables: {e}")
+
 
 init_user_db()
+
+
+def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+    try:
+        conn = get_app_db_connection(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE email = ?", (email.strip().lower(),))
+        row = cur.fetchone()
+        conn.close()
+        if row:
+            return dict(row)
+    except Exception:
+        pass
+    return None
+
+
+def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
+    try:
+        conn = get_app_db_connection(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        row = cur.fetchone()
+        conn.close()
+        if row:
+            return dict(row)
+    except Exception:
+        pass
+    return None
+
+
+def get_user_by_api_key(api_key: str) -> Optional[Dict[str, Any]]:
+    if not api_key:
+        return None
+    try:
+        conn = get_app_db_connection(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE api_key = ?", (api_key.strip(),))
+        row = cur.fetchone()
+        conn.close()
+        if row:
+            return dict(row)
+    except Exception:
+        pass
+    return None
+
+
+def save_user(user: Dict[str, Any]) -> None:
+    conn = get_app_db_connection(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO users (id, email, name, password_hash, role, tier, provider, api_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(email) DO UPDATE SET
+            name = excluded.name,
+            password_hash = excluded.password_hash,
+            role = excluded.role,
+            tier = excluded.tier,
+            provider = excluded.provider,
+            api_key = excluded.api_key
+        """,
+        (
+            user["id"],
+            user["email"].strip().lower(),
+            user.get("name", user["email"].split("@")[0].capitalize()),
+            user["password_hash"],
+            user.get("role", "pro_trader"),
+            user.get("tier", "free"),
+            user.get("provider", "email"),
+            user.get("api_key") or f"mp_live_{secrets.token_hex(16)}",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def record_user_login(user_id: str) -> None:
+    try:
+        conn = get_app_db_connection(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
+def persist_session(jti: str, user_id: str, expires_at: int) -> None:
+    try:
+        conn = get_app_db_connection(DB_PATH)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO user_sessions (jti, user_id, expires_at, revoked)
+            VALUES (?, ?, ?, 0)
+            """,
+            (jti, user_id, int(expires_at)),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[SECURITY] Error persisting session: {e}")
+
+
+def revoke_session(jti: str) -> bool:
+    if not jti:
+        return False
+    try:
+        conn = get_app_db_connection(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("UPDATE user_sessions SET revoked = 1 WHERE jti = ?", (jti,))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception:
+        return False
+
+
+def is_session_active(jti: str) -> bool:
+    try:
+        conn = get_app_db_connection(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("SELECT revoked, expires_at FROM user_sessions WHERE jti = ?", (jti,))
+        row = cur.fetchone()
+        conn.close()
+        if not row:
+            return False
+        revoked = row["revoked"] if isinstance(row, dict) else row[0]
+        exp = row["expires_at"] if isinstance(row, dict) else row[1]
+        return int(revoked or 0) == 0 and int(exp or 0) > int(time.time())
+    except Exception:
+        return False
+
 
 def get_user_alert_config(user_id: str) -> dict:
     try:
@@ -131,17 +320,19 @@ def get_user_alert_config(user_id: str) -> dict:
     return {
         "user_id": user_id,
         "telegram_chat_id": "@marketprobe_alerts",
-        "whatsapp_phone": "+91 98765 43210",
+        "whatsapp_phone": "",
         "telegram_enabled": 1,
         "whatsapp_enabled": 0,
-        "min_conviction": 65.0
+        "min_conviction": 65.0,
     }
+
 
 def update_user_alert_config(user_id: str, cfg: dict) -> dict:
     try:
         conn = get_app_db_connection(DB_PATH)
         cur = conn.cursor()
-        cur.execute('''
+        cur.execute(
+            """
             INSERT INTO user_alert_configs (user_id, telegram_chat_id, whatsapp_phone, telegram_enabled, whatsapp_enabled, min_conviction)
             VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
@@ -150,14 +341,16 @@ def update_user_alert_config(user_id: str, cfg: dict) -> dict:
                 telegram_enabled = excluded.telegram_enabled,
                 whatsapp_enabled = excluded.whatsapp_enabled,
                 min_conviction = excluded.min_conviction
-        ''', (
-            user_id,
-            cfg.get("telegram_chat_id", "@marketprobe_alerts"),
-            cfg.get("whatsapp_phone", ""),
-            1 if cfg.get("telegram_enabled") else 0,
-            1 if cfg.get("whatsapp_enabled") else 0,
-            float(cfg.get("min_conviction", 60.0))
-        ))
+            """,
+            (
+                user_id,
+                cfg.get("telegram_chat_id", "@marketprobe_alerts"),
+                cfg.get("whatsapp_phone", ""),
+                1 if cfg.get("telegram_enabled") else 0,
+                1 if cfg.get("whatsapp_enabled") else 0,
+                float(cfg.get("min_conviction", 60.0)),
+            ),
+        )
         conn.commit()
         conn.close()
         return {"status": "success", "config": cfg}
@@ -166,60 +359,21 @@ def update_user_alert_config(user_id: str, cfg: dict) -> dict:
         return {"status": "error", "message": str(e)}
 
 
-def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
-    try:
-        conn = get_app_db_connection(DB_PATH)
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM users WHERE email = ?", (email.lower(),))
-        row = cur.fetchone()
-        conn.close()
-        if row:
-            return dict(row)
-    except Exception:
-        pass
-    return None
-
-def save_user(user: Dict[str, Any]) -> None:
-    try:
-        conn = get_app_db_connection(DB_PATH)
-        cur = conn.cursor()
-        cur.execute('''
-            INSERT INTO users (id, email, name, password_hash, role, tier, provider, api_key)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(email) DO UPDATE SET
-                name = excluded.name,
-                password_hash = excluded.password_hash,
-                role = excluded.role,
-                tier = excluded.tier,
-                provider = excluded.provider,
-                api_key = excluded.api_key
-        ''', (
-            user["id"],
-            user["email"].lower(),
-            user.get("name", user["email"].split("@")[0].capitalize()),
-            user.get("password_hash", ""),
-            user.get("role", "pro_trader"),
-            user.get("tier", "pro"),
-            user.get("provider", "email"),
-            user.get("api_key", f"mp_live_{abs(hash(user['email']))}")
-        ))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"[SECURITY] Error saving user: {e}")
-
-# Watchlist & Saved Calls Helpers
 def get_user_watchlist(user_id: str) -> list:
     try:
         conn = get_app_db_connection(DB_PATH)
         cur = conn.cursor()
-        cur.execute("SELECT symbol, notes, alert_above, alert_below, created_at FROM user_watchlists WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
+        cur.execute(
+            "SELECT symbol, notes, alert_above, alert_below, created_at FROM user_watchlists WHERE user_id = ? ORDER BY created_at DESC",
+            (user_id,),
+        )
         rows = [dict(r) for r in cur.fetchall()]
         conn.close()
         return rows
     except Exception as e:
         print(f"[SECURITY] Error fetching watchlist: {e}")
         return []
+
 
 def toggle_watchlist_item(user_id: str, symbol: str, notes: str = "") -> dict:
     try:
@@ -232,14 +386,17 @@ def toggle_watchlist_item(user_id: str, symbol: str, notes: str = "") -> dict:
             conn.commit()
             conn.close()
             return {"symbol": symbol.upper(), "action": "removed"}
-        else:
-            cur.execute("INSERT INTO user_watchlists (user_id, symbol, notes) VALUES (?, ?, ?)", (user_id, symbol.upper(), notes))
-            conn.commit()
-            conn.close()
-            return {"symbol": symbol.upper(), "action": "added"}
+        cur.execute(
+            "INSERT INTO user_watchlists (user_id, symbol, notes) VALUES (?, ?, ?)",
+            (user_id, symbol.upper(), notes),
+        )
+        conn.commit()
+        conn.close()
+        return {"symbol": symbol.upper(), "action": "added"}
     except Exception as e:
         print(f"[SECURITY] Error toggling watchlist: {e}")
         return {"symbol": symbol.upper(), "error": str(e)}
+
 
 def get_user_saved_calls(user_id: str) -> list:
     try:
@@ -253,6 +410,7 @@ def get_user_saved_calls(user_id: str) -> list:
         print(f"[SECURITY] Error fetching saved calls: {e}")
         return []
 
+
 def toggle_saved_call(user_id: str, call_id: str) -> dict:
     try:
         conn = get_app_db_connection(DB_PATH)
@@ -264,25 +422,35 @@ def toggle_saved_call(user_id: str, call_id: str) -> dict:
             conn.commit()
             conn.close()
             return {"call_id": str(call_id), "action": "unsaved"}
-        else:
-            cur.execute("INSERT INTO saved_calls (user_id, call_id) VALUES (?, ?)", (user_id, str(call_id)))
-            conn.commit()
-            conn.close()
-            return {"call_id": str(call_id), "action": "saved"}
+        cur.execute("INSERT INTO saved_calls (user_id, call_id) VALUES (?, ?)", (user_id, str(call_id)))
+        conn.commit()
+        conn.close()
+        return {"call_id": str(call_id), "action": "saved"}
     except Exception as e:
         print(f"[SECURITY] Error toggling saved call: {e}")
         return {"call_id": str(call_id), "error": str(e)}
 
-def record_subscription(user_id: str, gateway: str, tier: str, amount: float, order_id: str, payment_id: str, currency: str = "INR") -> dict:
+
+def record_subscription(
+    user_id: str,
+    gateway: str,
+    tier: str,
+    amount: float,
+    order_id: str,
+    payment_id: str,
+    currency: str = "INR",
+) -> dict:
     try:
         conn = get_app_db_connection(DB_PATH)
         cur = conn.cursor()
-        sub_id = f"sub_{int(time.time())}_{abs(hash(order_id)) % 10000}"
-        cur.execute('''
+        sub_id = f"sub_{int(time.time())}_{secrets.token_hex(4)}"
+        cur.execute(
+            """
             INSERT INTO subscriptions (id, user_id, gateway, tier, status, order_id, payment_id, amount, currency)
             VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)
-        ''', (sub_id, user_id, gateway, tier, order_id, payment_id, amount, currency))
-        # Update user's tier in users table (never self-escalate to institutional_admin via billing)
+            """,
+            (sub_id, user_id, gateway, tier, order_id, payment_id, amount, currency),
+        )
         new_role = "enterprise_trader" if tier == "enterprise" else "pro_trader"
         cur.execute("UPDATE users SET tier = ?, role = ? WHERE id = ?", (tier, new_role, user_id))
         conn.commit()
@@ -293,116 +461,57 @@ def record_subscription(user_id: str, gateway: str, tier: str, amount: float, or
         return {"status": "error", "message": str(e)}
 
 
-# In-memory mock user dictionary fallback
-USER_DB: Dict[str, Dict[str, Any]] = {
-    "admin@marketprobe.finance": {
-        "id": "usr_admin_001",
-        "email": "admin@marketprobe.finance",
-        "password_hash": "pbkdf2$sha256$20000$c2FsdF9hZG1pbg==$yDqQ/8G2Q4x9J3q5H0x1F2w8z7Y6U5V4T3S2R1Q0P9O=",
-        "name": "MarketProbe Admin",
-        "role": "institutional_admin",
-        "api_key": "mp_live_adm_9948271049283749",
-        "tier": "enterprise"
-    },
-    "trader@hedgefund.in": {
-        "id": "usr_pro_002",
-        "email": "trader@hedgefund.in",
-        "password_hash": "pbkdf2$sha256$20000$c2FsdF90cmFkZXI=$yDqQ/8G2Q4x9J3q5H0x1F2w8z7Y6U5V4T3S2R1Q0P9O=",
-        "name": "Quantitative Alpha Trader",
-        "role": "pro_trader",
-        "api_key": "mp_live_pro_5519284729103948",
-        "tier": "pro"
-    }
-}
-
-def hash_password(password: str, salt: Optional[str] = None) -> str:
-    if not salt:
-        salt = base64.b64encode(os.urandom(12)).decode('utf-8')
-    key = hashlib.pbkdf2_hmac(
-        'sha256',
-        password.encode('utf-8'),
-        salt.encode('utf-8'),
-        20000
-    )
-    return f"pbkdf2$sha256$20000${salt}${base64.b64encode(key).decode('utf-8')}"
-
-USER_DB["demo@marketprobe.in"] = {
-    "id": "usr_demo",
-    "email": "demo@marketprobe.in",
-    "password_hash": hash_password("demo123", "demosalt1234"),
-    "name": "Institutional Quant Desk",
-    "role": "pro_trader",
-    "api_key": "mp_live_demo_992837418293847",
-    "tier": "enterprise",
-}
-
-def verify_password(plain_password: str, hashed: str) -> bool:
-    try:
-        parts = hashed.split('$')
-        if len(parts) != 5:
-            return False
-        salt = parts[3]
-        expected_key = parts[4]
-        key = hashlib.pbkdf2_hmac(
-            'sha256',
-            plain_password.encode('utf-8'),
-            salt.encode('utf-8'),
-            int(parts[2])
-        )
-        return hmac.compare_digest(base64.b64encode(key).decode('utf-8'), expected_key)
-    except Exception:
-        return False
-
 def _base64url_encode(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).decode('utf-8').rstrip('=')
+    return base64.urlsafe_b64encode(data).decode("utf-8").rstrip("=")
+
 
 def _base64url_decode(data: str) -> bytes:
     pad = len(data) % 4
     if pad:
-        data += '=' * (4 - pad)
-    return base64.urlsafe_b64decode(data.encode('utf-8'))
+        data += "=" * (4 - pad)
+    return base64.urlsafe_b64decode(data.encode("utf-8"))
 
-def create_jwt_token(payload: Dict[str, Any]) -> str:
+
+def create_jwt_token(payload: Dict[str, Any], persist: bool = True) -> str:
     header = {"alg": JWT_ALGORITHM, "typ": "JWT"}
     now = int(time.time())
-    payload = payload.copy()
-    payload.setdefault("iat", now)
-    payload.setdefault("exp", now + ACCESS_TOKEN_EXPIRE_SECONDS)
-    
-    encoded_header = _base64url_encode(json.dumps(header).encode('utf-8'))
-    encoded_payload = _base64url_encode(json.dumps(payload).encode('utf-8'))
-    
-    signing_input = f"{encoded_header}.{encoded_payload}".encode('utf-8')
-    signature = hmac.new(SECRET_KEY.encode('utf-8'), signing_input, hashlib.sha256).digest()
+    claims = payload.copy()
+    claims.setdefault("iat", now)
+    claims.setdefault("exp", now + ACCESS_TOKEN_EXPIRE_SECONDS)
+    claims.setdefault("jti", secrets.token_hex(16))
+
+    if persist and claims.get("sub"):
+        persist_session(str(claims["jti"]), str(claims["sub"]), int(claims["exp"]))
+
+    encoded_header = _base64url_encode(json.dumps(header).encode("utf-8"))
+    encoded_payload = _base64url_encode(json.dumps(claims).encode("utf-8"))
+    signing_input = f"{encoded_header}.{encoded_payload}".encode("utf-8")
+    signature = hmac.new(SECRET_KEY.encode("utf-8"), signing_input, hashlib.sha256).digest()
     encoded_signature = _base64url_encode(signature)
-    
     return f"{encoded_header}.{encoded_payload}.{encoded_signature}"
 
+
 def verify_jwt_token(token: str) -> Dict[str, Any]:
-    if ALLOW_DEMO_TOKEN and token == "demo_jwt_token":
-        return {
-            "sub": "usr_demo",
-            "email": "demo@marketprobe.in",
-            "name": "Institutional Quant Desk",
-            "role": "pro_trader",
-            "tier": "pro",
-        }
     try:
-        parts = token.split('.')
+        parts = str(token or "").split(".")
         if len(parts) != 3:
             raise ValueError("Malformed token")
-        
-        signing_input = f"{parts[0]}.{parts[1]}".encode('utf-8')
-        expected_sig = hmac.new(SECRET_KEY.encode('utf-8'), signing_input, hashlib.sha256).digest()
+
+        signing_input = f"{parts[0]}.{parts[1]}".encode("utf-8")
+        expected_sig = hmac.new(SECRET_KEY.encode("utf-8"), signing_input, hashlib.sha256).digest()
         actual_sig = _base64url_decode(parts[2])
-        
+
         if not hmac.compare_digest(expected_sig, actual_sig):
             raise ValueError("Signature mismatch")
-            
-        payload = json.loads(_base64url_decode(parts[1]).decode('utf-8'))
-        if payload.get("exp") and payload["exp"] < time.time():
+
+        payload = json.loads(_base64url_decode(parts[1]).decode("utf-8"))
+        if payload.get("exp") and float(payload["exp"]) < time.time():
             raise ValueError("Token expired")
-            
+
+        jti = payload.get("jti")
+        if jti and not is_session_active(str(jti)):
+            raise ValueError("Session revoked or expired")
+
         return payload
     except Exception as e:
         raise HTTPException(
@@ -411,46 +520,64 @@ def verify_jwt_token(token: str) -> Dict[str, Any]:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+
 def get_current_user_optional(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Security(security_bearer)
+    credentials: Optional[HTTPAuthorizationCredentials] = Security(security_bearer),
 ) -> Dict[str, Any]:
-    # 1. Check API Key header
+    # 1. Check real DB-backed API Key header
     api_key = request.headers.get("X-API-KEY")
     if api_key:
-        for u in USER_DB.values():
-            if u.get("api_key") == api_key:
-                return {"id": u["id"], "email": u["email"], "role": u["role"], "tier": u["tier"], "auth_type": "api_key"}
+        db_user = get_user_by_api_key(api_key)
+        if db_user:
+            return {
+                "id": db_user["id"],
+                "email": db_user["email"],
+                "name": db_user.get("name") or db_user["email"],
+                "role": db_user.get("role", "pro_trader"),
+                "tier": db_user.get("tier", "free"),
+                "api_key": db_user.get("api_key"),
+                "auth_type": "api_key",
+            }
         raise HTTPException(status_code=401, detail="Invalid API Key")
 
-    # 2. Check Bearer Token
+    # 2. Check real DB-backed Bearer JWT + active session
     if credentials:
         try:
             payload = verify_jwt_token(credentials.credentials)
-            return {
-                "id": payload.get("sub"),
-                "email": payload.get("email"),
-                "name": payload.get("name") or payload.get("email"),
-                "role": payload.get("role", "free_user"),
-                "tier": payload.get("tier", "free"),
-                "auth_type": "jwt"
-            }
+            sub = payload.get("sub")
+            db_user = get_user_by_id(str(sub)) if sub else None
+            if not db_user and payload.get("email"):
+                db_user = get_user_by_email(str(payload["email"]))
+            if db_user:
+                return {
+                    "id": db_user["id"],
+                    "email": db_user["email"],
+                    "name": db_user.get("name") or db_user["email"],
+                    "role": db_user.get("role", "pro_trader"),
+                    "tier": db_user.get("tier", "free"),
+                    "api_key": db_user.get("api_key"),
+                    "jti": payload.get("jti"),
+                    "auth_type": "jwt",
+                }
         except HTTPException:
             pass
 
-    # 3. Default Anonymous Free Tier
+    # 3. Unauthenticated guest
     return {
         "id": "anon_client",
         "email": "anonymous@marketprobe.local",
         "role": "anonymous",
         "tier": "free",
-        "auth_type": "public"
+        "auth_type": "public",
     }
+
 
 def require_auth(user: Dict[str, Any] = Security(get_current_user_optional)) -> Dict[str, Any]:
     if user["role"] == "anonymous":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required. Please provide a Bearer JWT or X-API-KEY header."
+            detail="Authentication required. Please sign in with a verified MarketProbe account.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     return user
