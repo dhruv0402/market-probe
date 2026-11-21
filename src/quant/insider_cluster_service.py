@@ -13,12 +13,15 @@ Combines:
    - INSIDER_DISTRIBUTION  (Cluster Insider Selling with Cautious/Mixed Consensus)
 """
 
+import csv
+import io
 import os
 import sqlite3
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from src.backend.db_adapter import UnifiedConnection, get_app_db_connection
 from src.quant.sec_edgar_service import fetch_form4_transactions_for_ticker
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -29,10 +32,8 @@ DEFAULT_US_WATCHLIST = ["AAPL", "NVDA", "MSFT", "META", "TSLA", "INTC", "AMD", "
 CSUITE_KEYWORDS = ("CEO", "CFO", "CHIEF EXECUTIVE", "CHIEF FINANCIAL", "MANAGING DIRECTOR", "CHAIRMAN", "PROMOTER", "PRESIDENT", "COO")
 
 
-def _get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+def _get_conn() -> UnifiedConnection:
+    return get_app_db_connection(DB_PATH)
 
 
 def init_insider_tables() -> None:
@@ -68,8 +69,9 @@ def init_insider_tables() -> None:
     conn.commit()
 
     # Seed transparently tagged baseline SEBI PIT & Form 4 cluster reference records if table is empty
-    cur.execute("SELECT COUNT(*) FROM insider_transactions;")
-    count = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) AS cnt FROM insider_transactions;")
+    row0 = cur.fetchone()
+    count = row0["cnt"] if isinstance(row0, dict) else row0[0]
     if count == 0:
         _seed_baseline_disclosures(conn)
     conn.close()
@@ -221,12 +223,15 @@ def sync_live_sec_form4(tickers: Optional[List[str]] = None, max_filings_per_tic
     }
 
 
-def _fetch_finfluencer_consensus_map(conn: sqlite3.Connection) -> Dict[str, Dict[str, Any]]:
+def _fetch_finfluencer_consensus_map(_unused_conn: Any = None) -> Dict[str, Dict[str, Any]]:
     """
     Aggregates real finfluencer & brokerage consensus per ticker from MarketProbe's
-    `recommendations` table (strictly excluding SYNTHETIC_BENCHMARK rows).
+    SQLite `recommendations` ledger (strictly excluding SYNTHETIC_BENCHMARK rows).
+    Always queries the canonical SQLite ledger even when app state runs on PostgreSQL.
     """
-    cur = conn.cursor()
+    sq = sqlite3.connect(DB_PATH)
+    sq.row_factory = sqlite3.Row
+    cur = sq.cursor()
     cur.execute(
         """
         SELECT
@@ -239,8 +244,10 @@ def _fetch_finfluencer_consensus_map(conn: sqlite3.Connection) -> Dict[str, Dict
         GROUP BY clean_ticker, UPPER(r.action);
         """
     )
+    rows = cur.fetchall()
+    sq.close()
     agg: Dict[str, Dict[str, Any]] = defaultdict(lambda: {"buy": 0, "sell": 0, "hit_rates": []})
-    for row in cur.fetchall():
+    for row in rows:
         sym = row["clean_ticker"]
         act = row["action"]
         cnt = int(row["cnt"] or 0)
@@ -505,4 +512,123 @@ def get_ticker_insider_summary(ticker: str, window_days: int = 90) -> Dict[str, 
         "finfluencer_consensus": finf,
         "divergence": divergence,
         "transactions": rows[:20],
+    }
+
+
+def _parse_nse_date(raw: str) -> str:
+    txt = (raw or "").strip()
+    for fmt in ("%d-%b-%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%d-%b-%Y %H:%M"):
+        try:
+            return datetime.strptime(txt[: len(fmt) + 3].strip(), fmt).strftime("%Y-%m-%d")
+        except Exception:
+            continue
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _parse_float(raw: str) -> float:
+    cleaned = str(raw or "").replace(",", "").replace("₹", "").strip()
+    try:
+        return float(cleaned)
+    except Exception:
+        return 0.0
+
+
+def import_nse_sebi_pit_csv(csv_text: str) -> Dict[str, Any]:
+    """
+    Parses an official NSE India SEBI PIT Insider Trading CSV export
+    (`CF-Insider-Trading-equities-*.csv`) and ingests strictly open-market
+    Promoter / KMP / Director purchases & sales (`Market Purchase` / `Market Sale`),
+    excluding ESOPs, gifts, pledges, and off-market transfers.
+    """
+    init_insider_tables()
+    if not csv_text or not csv_text.strip():
+        return {"status": "error", "message": "Empty CSV input.", "parsed": 0, "inserted": 0}
+
+    reader = csv.DictReader(io.StringIO(csv_text.lstrip("\ufeff")))
+    parsed_txs: List[Dict[str, Any]] = []
+    skipped_non_market = 0
+
+    for idx, raw_row in enumerate(reader):
+        row = {(k or "").strip().upper(): (v or "").strip() for k, v in raw_row.items()}
+        symbol = (row.get("SYMBOL") or row.get("TICKER") or "").upper().replace(".NS", "").strip()
+        if not symbol:
+            continue
+
+        mode = (row.get("MODE OF ACQUISITION") or row.get("MODE") or "Market Purchase").lower()
+        tx_type = (
+            row.get("ACQUISITION/DISPOSAL TRANSACTION TYPE")
+            or row.get("TRANSACTION TYPE")
+            or row.get("TYPE")
+            or ""
+        ).lower()
+
+        # STRICT FILTER: open-market trades ONLY (reject ESOP, Gift, Pledge, Inter-se transfer)
+        if any(bad in mode for bad in ("esop", "gift", "pledge", "off market", "inter-se", "invocation", "revocation", "allotment", "bonus")):
+            skipped_non_market += 1
+            continue
+
+        if "buy" in tx_type or "purchase" in tx_type or "market purchase" in mode:
+            code = "P"
+        elif "sell" in tx_type or "sale" in tx_type or "market sale" in mode:
+            code = "S"
+        else:
+            skipped_non_market += 1
+            continue
+
+        shares = _parse_float(
+            row.get("NO. OF SECURITY (ACQUIRED/DISPLOSED)")
+            or row.get("NO. OF SECURITIES (ACQUIRED/DISPOSED)")
+            or row.get("SHARES")
+            or "0"
+        )
+        total_val = _parse_float(
+            row.get("VALUE OF SECURITY (ACQUIRED/DISPLOSED)")
+            or row.get("VALUE OF SECURITY (ACQUIRED/DISPOSED)")
+            or row.get("TOTAL_VALUE")
+            or "0"
+        )
+        if shares <= 0 or total_val <= 0:
+            continue
+
+        price = round(total_val / shares, 2)
+        insider = row.get("NAME OF THE ACQUIRER/DISPOSER") or row.get("INSIDER_NAME") or "NSE Designated Insider"
+        role = row.get("CATEGORY OF PERSON") or row.get("ROLE") or "Promoter / KMP"
+        company = row.get("COMPANY") or symbol
+        tx_date = _parse_nse_date(
+            row.get("DATE OF ALLOTMENT/ACQUISITION FROM")
+            or row.get("TRANSACTION_DATE")
+            or row.get("BROADCASTE DATE AND TIME")
+            or ""
+        )
+        filing_date = _parse_nse_date(row.get("BROADCASTE DATE AND TIME") or tx_date)
+        acc = f"NSE-PIT-{symbol}-{tx_date}-{idx}"
+
+        parsed_txs.append(
+            {
+                "ticker": symbol,
+                "company_name": company,
+                "market": "IN_SEBI_PIT",
+                "insider_name": insider,
+                "insider_role": role[:80],
+                "transaction_code": code,
+                "shares": round(shares, 2),
+                "price": price,
+                "total_value": round(total_val, 2),
+                "currency": "INR",
+                "transaction_date": tx_date,
+                "filing_date": filing_date,
+                "filing_url": f"https://www.nseindia.com/companies-listing/corporate-filings-insider-trading?symbol={symbol}",
+                "accession_no": acc,
+                "verification_tier": "VERIFIED_NSE_SEBI_PIT",
+            }
+        )
+
+    inserted = _store_transactions(parsed_txs)
+    return {
+        "status": "imported",
+        "open_market_parsed": len(parsed_txs),
+        "newly_inserted": inserted,
+        "skipped_non_market": skipped_non_market,
+        "buys": sum(1 for x in parsed_txs if x["transaction_code"] == "P"),
+        "sells": sum(1 for x in parsed_txs if x["transaction_code"] == "S"),
     }

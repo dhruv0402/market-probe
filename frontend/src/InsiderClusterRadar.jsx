@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Users,
   ShieldAlert,
@@ -12,6 +12,7 @@ import {
   TrendingUp,
   TrendingDown,
   ShieldCheck,
+  UploadCloud,
 } from 'lucide-react';
 
 function fmtNotional(val, currency = 'USD') {
@@ -58,8 +59,33 @@ export default function InsiderClusterRadar({ onAuditInCouncil }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [importingCsv, setImportingCsv] = useState(false);
   const [syncBanner, setSyncBanner] = useState(null);
   const [expandedTicker, setExpandedTicker] = useState(null);
+  const csvInputRef = useRef(null);
+
+  const handleImportPitCsv = async (file) => {
+    if (!file) return;
+    setImportingCsv(true);
+    setSyncBanner(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await fetch('/api/insiders/import-sebi-pit', { method: 'POST', body: fd });
+      if (r.ok) {
+        const res = await r.json();
+        setSyncBanner(
+          `NSE SEBI PIT CSV import complete: parsed ${res.open_market_parsed || 0} open-market trades (${res.newly_inserted || 0} new, ${res.skipped_non_market || 0} non-market/ESOPs excluded).`
+        );
+        await loadClusters(market, windowDays, minInsiders);
+      }
+    } catch {
+      setSyncBanner('Failed to parse NSE SEBI PIT CSV file.');
+    } finally {
+      setImportingCsv(false);
+      if (csvInputRef.current) csvInputRef.current.value = '';
+    }
+  };
 
   const loadClusters = async (mkt = market, win = windowDays, minIn = minInsiders) => {
     setLoading(true);
@@ -130,15 +156,35 @@ export default function InsiderClusterRadar({ onAuditInCouncil }) {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleSyncSec}
-            disabled={syncing}
-            className="px-3.5 py-2 rounded bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-            <span>{syncing ? 'Syncing Live Form 4 XML...' : 'Sync Live SEC Form 4'}</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={csvInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => handleImportPitCsv(e.target.files?.[0])}
+            />
+            <button
+              type="button"
+              onClick={() => csvInputRef.current?.click()}
+              disabled={importingCsv}
+              className="px-3 py-2 rounded bg-[#111722] border border-[#1b2434] hover:border-emerald-500/50 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+              title="Upload CF-Insider-Trading-equities-*.csv downloaded from NSE India"
+            >
+              <UploadCloud className="w-3.5 h-3.5" />
+              <span>{importingCsv ? 'Importing PIT CSV...' : 'Import NSE PIT CSV'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSyncSec}
+              disabled={syncing}
+              className="px-3.5 py-2 rounded bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+              <span>{syncing ? 'Syncing Live Form 4 XML...' : 'Sync Live SEC Form 4'}</span>
+            </button>
+          </div>
         </div>
 
         {/* Filter Bar */}

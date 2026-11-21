@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from src.backend.db_adapter import UnifiedConnection, get_app_db_connection
 from src.quant.llm_orchestrator import get_orchestrator
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -83,10 +84,8 @@ _FINBERT_PIPE = None
 _FINBERT_CHECKED = False
 
 
-def _get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+def _get_conn() -> UnifiedConnection:
+    return get_app_db_connection(DB_PATH)
 
 
 def init_vocal_stress_tables() -> None:

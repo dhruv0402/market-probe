@@ -228,3 +228,54 @@ def test_vocal_stress_real_librosa_audio_upload_and_sample():
     conn.execute("DELETE FROM earnings_stress_audits WHERE call_title = 'TCS Earnings Call Vocal Forensics'")
     conn.commit()
     conn.close()
+
+
+def test_db_adapter_postgres_translation_and_health_metadata():
+    from src.backend.db_adapter import _translate_sql_for_postgres
+
+    ddl = _translate_sql_for_postgres(
+        "CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, flag BOOLEAN DEFAULT 0)"
+    )
+    assert "SERIAL PRIMARY KEY" in ddl
+    assert "INTEGER DEFAULT 0" in ddl
+
+    dml = _translate_sql_for_postgres("INSERT OR IGNORE INTO users (id, email) VALUES (?, ?)")
+    assert dml.startswith("INSERT INTO users")
+    assert "%s, %s" in dml
+    assert "ON CONFLICT DO NOTHING" in dml
+
+    health = client.get("/api/health").json()
+    assert health["database_backend"]["backend"] in ("sqlite", "postgresql")
+    assert "market_data_connector" in health
+
+
+def test_nse_sebi_pit_csv_importer_and_official_indices_endpoint():
+    sample_csv = (
+        "SYMBOL,COMPANY,NAME OF THE ACQUIRER/DISPOSER,CATEGORY OF PERSON,"
+        "NO. OF SECURITY (ACQUIRED/DISPLOSED),VALUE OF SECURITY (ACQUIRED/DISPLOSED),"
+        "ACQUISITION/DISPOSAL TRANSACTION TYPE,MODE OF ACQUISITION,"
+        "DATE OF ALLOTMENT/ACQUISITION FROM,BROADCASTE DATE AND TIME\n"
+        "UNITTESTCO,Unit Test India Ltd,A. Sharma,Promoter,5000,7500000,Buy,Market Purchase,18-Nov-2026,19-Nov-2026 10:15\n"
+        "UNITTESTCO,Unit Test India Ltd,B. Rao,Director,10000,15000000,Buy,ESOP,18-Nov-2026,19-Nov-2026 10:15\n"
+        "UNITTESTCO,Unit Test India Ltd,C. Nair,KMP,2000,3000000,Sell,Market Sale,18-Nov-2026,19-Nov-2026 10:15\n"
+    )
+    resp = client.post("/api/insiders/import-sebi-pit", json={"csv_text": sample_csv})
+    assert resp.status_code == 200
+    d = resp.json()
+    assert d["open_market_parsed"] == 2
+    assert d["skipped_non_market"] == 1
+    assert d["buys"] == 1 and d["sells"] == 1
+
+    # Clean up test ticker from DB
+    import sqlite3, os
+    conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "marketprobe.db"))
+    conn.execute("DELETE FROM insider_transactions WHERE ticker = 'UNITTESTCO'")
+    conn.commit()
+    conn.close()
+
+    # Official NSE allIndices endpoint
+    idx_resp = client.get("/api/market/indices")
+    assert idx_resp.status_code == 200
+    idx_data = idx_resp.json()
+    assert idx_data["status"] in ("live", "cached_fallback", "unavailable")
+    assert "connector" in idx_data

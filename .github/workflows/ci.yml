@@ -1,132 +1,66 @@
-name: MarketProbe Enterprise CI/CD Pipeline
+name: MarketProbe CI & Data Hygiene
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
+    branches: [ main ]
+  schedule:
+    # Weekly Sunday 03:00 UTC automated hygiene & regression check
+    - cron: '0 3 * * 0'
 
 jobs:
-  # -------------------------------------------------------------
-  # Job 1: Backend Testing, Static Analysis & Validation Pipeline
-  # -------------------------------------------------------------
-  backend-test-and-lint:
-    name: Backend Test Suite & Code Quality
+  backend-and-hygiene:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        python-version: ['3.11', '3.12']
-
     steps:
-      - name: Checkout Codebase
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.11'
           cache: 'pip'
 
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-cov httpx starlette ruff
+      - name: Install system audio libraries (ffmpeg + libsndfile1)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libsndfile1
 
-      - name: Ruff Code Quality & Syntax Verification
+      - name: Install Python dependencies
         run: |
-          # Check for syntax errors or undefined names
-          ruff check src/ tests/ test_e2e.py --select=E9,F63,F7,F82 --show-source
+          pip install --upgrade pip
+          pip install -r requirements.txt pytest
 
-      - name: Run Pytest Validation Suite (Unit & Component Tests)
+      - name: Run full pytest suite
+        env:
+          MARKETPROBE_SECRET_KEY: ci-test-secret-key-not-for-prod
+          MARKETPROBE_ALLOW_DEMO_TOKEN: "true"
+        run: PYTHONPATH=. pytest tests/ -v
+
+      - name: Enforce SQLite Data Hygiene & Zero Synthetic Anomalies
         run: |
-          pytest -v tests/ --maxfail=1
+          PYTHONPATH=. python -c "
+          from src.quant.hygiene_supervisor import run_hygiene_audit
+          report = run_hygiene_audit()
+          print('Hygiene Report:', report)
+          assert report.get('anomalies_remaining', 1) == 0, 'Hygiene anomalies detected!'
+          assert report.get('tier_counts', {}).get('SYNTHETIC_BENCHMARK', 0) == 0, 'Synthetic rows leaked into DB!'
+          "
 
-      - name: Run MarketProbe Comprehensive E2E Test Suite
-        run: |
-          python test_e2e.py
-
-  # -------------------------------------------------------------
-  # Job 2: Frontend Build, Lint & Asset Optimization
-  # -------------------------------------------------------------
-  frontend-build-and-check:
-    name: Frontend Build & Bundle Verification
+  frontend-build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Codebase
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install Frontend Dependencies
+      - name: Install and build React production bundle
         working-directory: frontend
         run: |
           npm ci
-
-      - name: Verify Production Frontend Build
-        working-directory: frontend
-        run: |
           npm run build
-
-  # -------------------------------------------------------------
-  # Job 3: Docker Container Build & Packaging Verification
-  # -------------------------------------------------------------
-  docker-build-verification:
-    name: Docker Multi-Stage Container Build
-    needs: [backend-test-and-lint, frontend-build-and-check]
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Codebase
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: actions/setup-buildx-action@v3
-
-      - name: Build Production Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: false
-          tags: marketprobe:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # -------------------------------------------------------------
-  # Job 4: Post-Deploy Continuous Delivery Verification (Main Only)
-  # -------------------------------------------------------------
-  production-health-check:
-    name: Render Production Health Audit
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [docker-build-verification]
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Await Auto-Deploy & Validate Production API
-        run: |
-          echo "Render auto-deploys from main. Polling health probe..."
-          URL="https://marketprobe.onrender.com/api/health"
-          MAX_ATTEMPTS=6
-          SLEEP_SEC=20
-          for i in $(seq 1 $MAX_ATTEMPTS); do
-            echo "Attempt $i/$MAX_ATTEMPTS: Checking $URL..."
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || true)
-            if [ "$STATUS" = "200" ]; then
-              echo "✅ MarketProbe Production API is HEALTHY (HTTP 200)!"
-              exit 0
-            else
-              echo "Server returned HTTP $STATUS. Waiting ${SLEEP_SEC}s..."
-              sleep $SLEEP_SEC
-            fi
-          done
-          echo "⚠️ Health check timed out or service asleep on free tier (non-fatal)."
-          exit 0

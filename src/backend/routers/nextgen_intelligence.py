@@ -124,6 +124,32 @@ async def trigger_insider_sec_sync(req: Optional[InsiderSyncRequest] = None):
     return await asyncio.to_thread(sync_live_sec_form4, tickers, max_f)
 
 
+@router.post("/api/insiders/import-sebi-pit")
+async def import_nse_sebi_pit_disclosures(request: Request):
+    """Imports official NSE SEBI PIT Insider Trading CSV (`CF-Insider-Trading-equities-*.csv`)."""
+    from src.quant.insider_cluster_service import import_nse_sebi_pit_csv
+
+    content_type = (request.headers.get("content-type") or "").lower()
+    csv_text = ""
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        upload = form.get("file") or form.get("csv_file")
+        if upload is not None and hasattr(upload, "read"):
+            raw = await upload.read()
+            csv_text = raw.decode("utf-8", errors="ignore")
+        else:
+            csv_text = str(form.get("csv_text") or "")
+    else:
+        try:
+            body = await request.json()
+            csv_text = str(body.get("csv_text") or "")
+        except Exception:
+            raw = await request.body()
+            csv_text = raw.decode("utf-8", errors="ignore")
+
+    return await asyncio.to_thread(import_nse_sebi_pit_csv, csv_text)
+
+
 @router.post("/api/audio/stress-audit")
 async def run_earnings_vocal_stress_audit(request: Request):
     """

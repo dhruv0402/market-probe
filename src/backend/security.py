@@ -16,6 +16,7 @@ import sqlite3
 from typing import Optional, Dict, Any
 from fastapi import HTTPException, Security, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from src.backend.db_adapter import get_app_db_connection
 
 SECRET_KEY = os.environ.get("MARKETPROBE_SECRET_KEY", "marketprobe-local-dev-secret-change-in-prod")
 IS_PRODUCTION = os.environ.get("ENV", "").lower() == "production" or os.environ.get("RENDER", "").lower() == "true"
@@ -25,12 +26,12 @@ ACCESS_TOKEN_EXPIRE_SECONDS = 86400 * 7 # 7 days
 
 security_bearer = HTTPBearer(auto_error=False)
 
-# SQLite User Persistence Setup
+# Dual-Engine User Persistence Setup (PostgreSQL via DATABASE_URL in prod, SQLite locally)
 DB_PATH = os.environ.get("MARKETPROBE_DB_PATH", os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "marketprobe.db"))
 
 def init_user_db():
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_app_db_connection(DB_PATH)
         cur = conn.cursor()
         cur.execute('''
             CREATE TABLE IF NOT EXISTS users (
@@ -46,16 +47,18 @@ def init_user_db():
             )
         ''')
         # Seed default admin & quant accounts if empty
-        cur.execute("SELECT COUNT(*) FROM users")
-        if cur.fetchone()[0] == 0:
+        cur.execute("SELECT COUNT(*) AS cnt FROM users")
+        row0 = cur.fetchone()
+        existing_cnt = row0["cnt"] if isinstance(row0, dict) else row0[0]
+        if existing_cnt == 0:
             cur.execute('''
-                INSERT INTO users (id, email, name, password_hash, role, tier, provider, api_key)
+                INSERT OR IGNORE INTO users (id, email, name, password_hash, role, tier, provider, api_key)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', ("usr_admin_001", "admin@marketprobe.finance", "MarketProbe Admin",
                   "pbkdf2$sha256$20000$c2FsdF9hZG1pbg==$yDqQ/8G2Q4x9J3q5H0x1F2w8z7Y6U5V4T3S2R1Q0P9O=",
                   "institutional_admin", "enterprise", "email", "mp_live_adm_9948271049283749"))
             cur.execute('''
-                INSERT INTO users (id, email, name, password_hash, role, tier, provider, api_key)
+                INSERT OR IGNORE INTO users (id, email, name, password_hash, role, tier, provider, api_key)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', ("usr_pro_002", "trader@hedgefund.in", "Quantitative Alpha Trader",
                   "pbkdf2$sha256$20000$c2FsdF90cmFkZXI=$yDqQ/8G2Q4x9J3q5H0x1F2w8z7Y6U5V4T3S2R1Q0P9O=",
@@ -116,8 +119,7 @@ init_user_db()
 
 def get_user_alert_config(user_id: str) -> dict:
     try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = get_app_db_connection(DB_PATH)
         cur = conn.cursor()
         cur.execute("SELECT * FROM user_alert_configs WHERE user_id = ?", (user_id,))
         row = cur.fetchone()
@@ -137,11 +139,17 @@ def get_user_alert_config(user_id: str) -> dict:
 
 def update_user_alert_config(user_id: str, cfg: dict) -> dict:
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_app_db_connection(DB_PATH)
         cur = conn.cursor()
         cur.execute('''
-            INSERT OR REPLACE INTO user_alert_configs (user_id, telegram_chat_id, whatsapp_phone, telegram_enabled, whatsapp_enabled, min_conviction)
+            INSERT INTO user_alert_configs (user_id, telegram_chat_id, whatsapp_phone, telegram_enabled, whatsapp_enabled, min_conviction)
             VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                telegram_chat_id = excluded.telegram_chat_id,
+                whatsapp_phone = excluded.whatsapp_phone,
+                telegram_enabled = excluded.telegram_enabled,
+                whatsapp_enabled = excluded.whatsapp_enabled,
+                min_conviction = excluded.min_conviction
         ''', (
             user_id,
             cfg.get("telegram_chat_id", "@marketprobe_alerts"),
@@ -160,8 +168,7 @@ def update_user_alert_config(user_id: str, cfg: dict) -> dict:
 
 def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
     try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = get_app_db_connection(DB_PATH)
         cur = conn.cursor()
         cur.execute("SELECT * FROM users WHERE email = ?", (email.lower(),))
         row = cur.fetchone()
@@ -174,11 +181,18 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
 
 def save_user(user: Dict[str, Any]) -> None:
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_app_db_connection(DB_PATH)
         cur = conn.cursor()
         cur.execute('''
-            INSERT OR REPLACE INTO users (id, email, name, password_hash, role, tier, provider, api_key)
+            INSERT INTO users (id, email, name, password_hash, role, tier, provider, api_key)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(email) DO UPDATE SET
+                name = excluded.name,
+                password_hash = excluded.password_hash,
+                role = excluded.role,
+                tier = excluded.tier,
+                provider = excluded.provider,
+                api_key = excluded.api_key
         ''', (
             user["id"],
             user["email"].lower(),
@@ -197,8 +211,7 @@ def save_user(user: Dict[str, Any]) -> None:
 # Watchlist & Saved Calls Helpers
 def get_user_watchlist(user_id: str) -> list:
     try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = get_app_db_connection(DB_PATH)
         cur = conn.cursor()
         cur.execute("SELECT symbol, notes, alert_above, alert_below, created_at FROM user_watchlists WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
         rows = [dict(r) for r in cur.fetchall()]
@@ -210,7 +223,7 @@ def get_user_watchlist(user_id: str) -> list:
 
 def toggle_watchlist_item(user_id: str, symbol: str, notes: str = "") -> dict:
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_app_db_connection(DB_PATH)
         cur = conn.cursor()
         cur.execute("SELECT id FROM user_watchlists WHERE user_id = ? AND symbol = ?", (user_id, symbol.upper()))
         existing = cur.fetchone()
@@ -230,8 +243,7 @@ def toggle_watchlist_item(user_id: str, symbol: str, notes: str = "") -> dict:
 
 def get_user_saved_calls(user_id: str) -> list:
     try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = get_app_db_connection(DB_PATH)
         cur = conn.cursor()
         cur.execute("SELECT call_id, saved_at FROM saved_calls WHERE user_id = ? ORDER BY saved_at DESC", (user_id,))
         rows = [dict(r) for r in cur.fetchall()]
@@ -243,7 +255,7 @@ def get_user_saved_calls(user_id: str) -> list:
 
 def toggle_saved_call(user_id: str, call_id: str) -> dict:
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_app_db_connection(DB_PATH)
         cur = conn.cursor()
         cur.execute("SELECT id FROM saved_calls WHERE user_id = ? AND call_id = ?", (user_id, str(call_id)))
         existing = cur.fetchone()
@@ -263,7 +275,7 @@ def toggle_saved_call(user_id: str, call_id: str) -> dict:
 
 def record_subscription(user_id: str, gateway: str, tier: str, amount: float, order_id: str, payment_id: str, currency: str = "INR") -> dict:
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_app_db_connection(DB_PATH)
         cur = conn.cursor()
         sub_id = f"sub_{int(time.time())}_{abs(hash(order_id)) % 10000}"
         cur.execute('''

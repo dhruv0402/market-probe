@@ -14,6 +14,7 @@ import { API, api, fmt, inr } from '../lib/apiClient.js';
 /* ---------------------------- STOCKS & SECTORS ---------------------------- */
 export function StocksRadar() {
   const [stocks, setStocks] = useState([]);
+  const [indices, setIndices] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tier, setTier] = useState('ALL');
   const [q, setQ] = useState('');
@@ -24,6 +25,9 @@ export function StocksRadar() {
       .then(d => setStocks(d.stocks || []))
       .catch(() => setStocks([]))
       .finally(() => setLoading(false));
+    api('/market/indices')
+      .then(d => setIndices(d))
+      .catch(() => setIndices(null));
   }, []);
 
   const filtered = stocks.filter(s => 
@@ -37,9 +41,45 @@ export function StocksRadar() {
         <div>
           <div className="eyebrow"><Layers size={13} /> Market Consensus Radar</div>
           <h1 className="mp-h1">NSE Stocks & Sectors</h1>
-          <p className="mp-sub">Aggregated finfluencer call consensus, target upside projections, and empirical accuracy per ticker.</p>
+          <p className="mp-sub">Live official NSE sectoral breadth paired with aggregated finfluencer call consensus and empirical accuracy per ticker.</p>
         </div>
+        {indices?.status === 'live' && (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 11.5, fontFamily: 'var(--mono)' }}>
+            <span style={{ padding: '4px 10px', borderRadius: 6, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399' }}>
+              NSE LIVE · {indices.exchange_timestamp}
+            </span>
+            {indices.india_vix && (
+              <span style={{ padding: '4px 10px', borderRadius: 6, background: '#111722', border: '1px solid #1b2434', color: '#cbd5e1' }}>
+                INDIA VIX <b style={{ color: '#fbbf24' }}>{indices.india_vix.last}</b>
+              </span>
+            )}
+            <span style={{ padding: '4px 10px', borderRadius: 6, background: '#111722', border: '1px solid #1b2434', color: '#94a3b8' }}>
+              Breadth: <b style={{ color: '#34d399' }}>{indices.market_breadth?.advances || 0} Adv</b> / <b style={{ color: '#fb7185' }}>{indices.market_breadth?.declines || 0} Dec</b>
+            </span>
+          </div>
+        )}
       </div>
+
+      {indices?.indices?.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', gap: 10, marginBottom: 18 }}>
+          {indices.indices.slice(0, 8).map(idx => {
+            const pos = (idx.change_pct || 0) >= 0;
+            return (
+              <div key={idx.index} className="card" style={{ padding: '10px 12px' }}>
+                <div style={{ fontSize: 10.5, color: 'var(--muted)', fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {idx.index}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 4 }}>
+                  <b style={{ fontSize: 14, fontFamily: 'var(--mono)', color: '#f8fafc' }}>{fmt(idx.last)}</b>
+                  <span style={{ fontSize: 11.5, fontFamily: 'var(--mono)', fontWeight: 700, color: pos ? '#34d399' : '#fb7185' }}>
+                    {pos ? '+' : ''}{idx.change_pct}%
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="toolbar" data-tour="stocks-radar">
         <div className="input search">
