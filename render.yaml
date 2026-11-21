@@ -6,7 +6,9 @@ services:
     plan: free
     region: singapore
     branch: main
-    autoDeploy: true
+    # CI-Gated CD: Keep autoDeploy false so Render deploys ONLY after GitHub Actions
+    # passes pytest, data hygiene, React build, and Docker build (via RENDER_DEPLOY_HOOK_URL).
+    autoDeploy: false
     healthCheckPath: /api/health
     envVars:
       - key: ENV

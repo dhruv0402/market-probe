@@ -141,12 +141,71 @@ def fetch_official_nse_indices(force_refresh: bool = False) -> Dict[str, Any]:
     }
 
 
+# Official NSE Security IDs for Dhan HQ v2 live OHLC quotes (blue-chip defaults)
+DHAN_NSE_SECURITY_IDS: Dict[str, int] = {
+    "RELIANCE": 2885,
+    "HDFCBANK": 1333,
+    "INFY": 1594,
+    "ICICIBANK": 4963,
+    "TCS": 11536,
+    "SBIN": 3045,
+    "BHARTIARTL": 10604,
+    "ITC": 1660,
+    "LT": 11483,
+    "BAJFINANCE": 317,
+    "TATAMOTORS": 3456,
+}
+
+
 def fetch_broker_equity_quotes(symbols: List[str]) -> Optional[Dict[str, Dict[str, Any]]]:
     """
-    Optional official Indian broker quote hook (Dhan HQ or Zerodha Kite Connect).
+    Optional official Indian broker quote hook (Dhan HQ v2 or Zerodha Kite Connect v3).
     Returns normalized `{SYMBOL: {price, change_pct, day_high, day_low, source}}`
     when credentials are present, or `None` to fall back cleanly to NSE/yfinance.
     """
+    # 1. Dhan HQ v2 Official MarketFeed OHLC API
+    dhan_client = os.environ.get("DHAN_CLIENT_ID")
+    dhan_token = os.environ.get("DHAN_ACCESS_TOKEN")
+    if dhan_client and dhan_token:
+        try:
+            sec_ids = [DHAN_NSE_SECURITY_IDS[s.replace(".NS", "").upper()] for s in symbols if s.replace(".NS", "").upper() in DHAN_NSE_SECURITY_IDS]
+            id_to_sym = {v: k for k, v in DHAN_NSE_SECURITY_IDS.items()}
+            if sec_ids:
+                resp = requests.post(
+                    "https://api.dhan.co/v2/marketfeed/ohlc",
+                    json={"NSE_EQ": sec_ids},
+                    headers={
+                        "access-token": dhan_token,
+                        "client-id": dhan_client,
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                    timeout=5.0,
+                )
+                if resp.status_code == 200:
+                    nse_data = (resp.json().get("data") or {}).get("NSE_EQ") or {}
+                    out: Dict[str, Dict[str, Any]] = {}
+                    for sid_str, v in nse_data.items():
+                        sym = id_to_sym.get(int(sid_str))
+                        if not sym or not isinstance(v, dict):
+                            continue
+                        last_p = float(v.get("last_price") or 0)
+                        ohlc = v.get("ohlc") or {}
+                        prev_c = float(ohlc.get("close") or last_p or 1)
+                        chg = round(((last_p - prev_c) / prev_c) * 100.0, 2) if prev_c > 0 else 0.0
+                        out[sym] = {
+                            "price": round(last_p, 2),
+                            "change_pct": chg,
+                            "day_high": round(float(ohlc.get("high") or last_p), 2),
+                            "day_low": round(float(ohlc.get("low") or last_p), 2),
+                            "source": "DHAN_HQ_LIVE",
+                        }
+                    if out:
+                        return out
+        except Exception:
+            pass
+
+    # 2. Zerodha Kite Connect v3 Quotes API
     kite_key = os.environ.get("KITE_API_KEY")
     kite_token = os.environ.get("KITE_ACCESS_TOKEN")
     if kite_key and kite_token:

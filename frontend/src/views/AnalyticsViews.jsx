@@ -61,7 +61,7 @@ export function StocksRadar() {
       </div>
 
       {indices?.indices?.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', gap: 10, marginBottom: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginBottom: 18 }}>
           {indices.indices.slice(0, 8).map(idx => {
             const pos = (idx.change_pct || 0) >= 0;
             return (
